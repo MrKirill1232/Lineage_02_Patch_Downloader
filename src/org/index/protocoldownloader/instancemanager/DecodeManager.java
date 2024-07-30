@@ -60,7 +60,7 @@ public class DecodeManager
             encodeBuffer.put(encodeArray[fIndex]);
         }
 
-        if (request.getLinkHolder().getTotalLength() == totalArrayLength)
+        if (request.getLinkHolder().getOriginalFileLength() == totalArrayLength)
         {
             return encodeBuffer.array();
         }
