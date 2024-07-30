@@ -1,0 +1,12 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="Lineage_02_Patch_Downloader_AIO:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/Lineage_02_Patch_Downloader_AIO_jar</output-path>
+    <root id="archive" name="Lineage_02_Patch_Downloader.jar">
+      <element id="module-output" name="Lineage_02_Patch_Downloader" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/libs/xz-1.9.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/libs/xz-1.9-source.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/libs/json-simple-1.1.1.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/libs/json-simple-1.1.1-sources.jar" path-in-jar="/" />
+    </root>
+  </artifact>
+</component>

@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/Lineage_02_Protocol_Downloader.iml" filepath="$PROJECT_DIR$/Lineage_02_Protocol_Downloader.iml" />
+      <module fileurl="file://$PROJECT_DIR$/Lineage_02_Patch_Downloader.iml" filepath="$PROJECT_DIR$/Lineage_02_Patch_Downloader.iml" />
     </modules>
   </component>
 </project>

@@ -1,4 +1,4 @@
 Manifest-Version: 1.0
-Main-Class: org.index.protocoldownloader.Controller
+Main-Class: org.index.patchdownloader.Controller
 Class-Path: lib/xz-1.9.jar lib/json-simple-1.1.1.jar
 
