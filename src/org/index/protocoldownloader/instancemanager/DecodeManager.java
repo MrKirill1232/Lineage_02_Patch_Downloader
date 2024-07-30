@@ -1,6 +1,5 @@
 package org.index.protocoldownloader.instancemanager;
 
-import org.index.protocoldownloader.enums.FileTypeByLink;
 import org.index.protocoldownloader.model.requests.DecodeRequest;
 import org.index.protocoldownloader.model.requests.DownloadRequest;
 import org.tukaani.xz.LZMAInputStream;
