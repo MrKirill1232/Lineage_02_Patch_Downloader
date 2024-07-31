@@ -106,10 +106,6 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
 
             for (int sIndex = 0; sIndex < countOfSeparatedFiles; sIndex++)
             {
-                if (isSeparated)
-                {
-                    System.currentTimeMillis();
-                }
                 String lookingInfo = isSeparated && sIndex != 1 ? stringMapOfValues.get(String.format(nameOfPart, (sIndex + 1))) : line;
                 String[] splitLineInfo = lookingInfo.split(":", 5);
                 if (splitLineInfo.length != 4)
@@ -122,7 +118,6 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
                 linkHolder.setNamesOfFiles(sIndex, getNameOfFile(pathUndName, false, false));
                 linkHolder.setAccessLink(sIndex, formatGetUrl(pathUndName));
                 linkHolder.setFileLength(sIndex, Integer.parseInt(fileLength));
-
                 _fileMapHolder.put((linkHolder.getFilePath() + linkHolder.getFileName()).toLowerCase(), linkHolder);
             }
         }
@@ -309,6 +304,6 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
         {
             return String.format(_cdnLinkType.getGeneralCdnLink(), _patchVersion, (patchVer + "/" + path + name));
         }
-        return String.format(_cdnLinkType.getGeneralCdnLink(), patchVer, ("zip" + "/" + path + name));
+        return String.format(_cdnLinkType.getGeneralCdnLink(), patchVer, (pathAndName));
     }
 }
