@@ -59,6 +59,17 @@ public class MainConfig implements IConfig
     @ConfigParameter(parameterName = "exclude_file_filter", canBeNull = true)
     public static String EXCLUDE_FILE_FILTER = "";
 
+    // C://dummy01//dummy02//lineage_2//system//locales//plugins
+    // DOWNLOAD_PATH = C://dummy01//dummy02//lineage_2//
+    // DEPTH_OF_FILE_CHECK = 2
+    // lineage_2    - depth 0 [include in file list]
+    // system       - depth 1 [include in file list]
+    // locales      - depth 2 [include in file list]
+    // plugins      - depth 3 [NOT include in file list]
+    // -1 - ignore depth
+    @ConfigParameter(parameterName = "depth_of_file_check")
+    public static int DEPTH_OF_FILE_CHECK = 3;
+
     @Override
     public void onLoad()
     {

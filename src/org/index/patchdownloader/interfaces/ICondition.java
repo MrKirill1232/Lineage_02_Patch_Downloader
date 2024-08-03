@@ -16,16 +16,31 @@ public interface ICondition
         return true;
     }
 
+    /**
+     * @return "condition" can be skipped from total filter list. In case where all "conditions" methods will return "false" - check method will return "false" as well.
+     */
+    default boolean optional()
+    {
+        return false;
+    }
+
     public static boolean checkCondition(List<ICondition> conditionList, LinkHolder linkHolder)
     {
         for (ICondition condition : conditionList)
         {
-            if (!condition.check(linkHolder))
+            if (condition.optional())
+            {
+                if (condition.check(linkHolder))
+                {
+                    return true;
+                }
+            }
+            else if (!condition.check(linkHolder))
             {
                 return false;
             }
         }
-        return true;
+        return false;
     }
 
     public static List<ICondition> loadConditions(GeneralLinkGenerator generalLinkGenerator)

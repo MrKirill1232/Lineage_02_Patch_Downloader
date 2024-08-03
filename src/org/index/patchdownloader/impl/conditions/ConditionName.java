@@ -2,10 +2,10 @@ package org.index.patchdownloader.impl.conditions;
 
 import org.index.patchdownloader.interfaces.ICondition;
 import org.index.patchdownloader.model.holders.LinkHolder;
+import org.index.patchdownloader.util.Utils;
 
 public class ConditionName implements ICondition
 {
-    @SuppressWarnings("unused")
     private final boolean _include;
     private final String _checkPath;
     private final String _checkName;
@@ -79,15 +79,15 @@ public class ConditionName implements ICondition
         String[] nameAndExtn = linkHolder.getFileName().split("\\.");
         if (_checkPath != null)
         {
-            if (_checkPath.equalsIgnoreCase("*"))
+            if (Utils.checkByChar(_checkPath, 1, 0, '*'))
             {
                 isCheckPath = true;
             }
-            else if (_checkPath.endsWith("*"))
+            else if (Utils.checkByChar(_checkPath, -1, (_checkPath.length() - 1), '*'))
             {
                 String pathOfFile = linkHolder.getFilePath();
                 String checkPath = _checkPath.substring(0, _checkPath.length() - 1);
-                if (checkPath.endsWith("/"))
+                if (checkPath.charAt(checkPath.length() - 1) == '/')
                 {
                     checkPath = checkPath.substring(0, checkPath.length() - 1);
                 }
@@ -96,7 +96,7 @@ public class ConditionName implements ICondition
                 {
                     pathOfFile = pathOfFile.substring(0, lastIndex);
                 }
-                isCheckPath = pathOfFile.startsWith(checkPath);
+                isCheckPath = pathOfFile.equalsIgnoreCase(checkPath);
             }
             else
             {
@@ -111,7 +111,7 @@ public class ConditionName implements ICondition
         }
         if (_checkName != null)
         {
-            if (_checkName.equalsIgnoreCase("*"))
+            if (Utils.checkByChar(_checkName, 1, 0, '*'))
             {
                 isCheckName = true;
             }
@@ -122,7 +122,7 @@ public class ConditionName implements ICondition
         }
         if (_checkExtn != null)
         {
-            if (_checkExtn.equalsIgnoreCase("*"))
+            if (Utils.checkByChar(_checkExtn, 1, 0, '*'))
             {
                 isCheckExtn = true;
             }
@@ -139,5 +139,21 @@ public class ConditionName implements ICondition
         {
             return !(isCheckPath && isCheckName && isCheckExtn);
         }
+    }
+
+    /**
+     * variable "optional" can be replaced by "include" variable because
+     * <br/>
+     * - on "false" - it will return "true" in case, when folder/file is not match to filter;
+     * <br/>
+     * - on "true" - it will return "true" if file match filter and "false" if not match.
+     * <br/>
+     * Optional only used for "include" == true, thats why it can be replaced by _include without declaration another variable.
+     * <br/>
+     */
+    @Override
+    public boolean optional()
+    {
+        return _include;
     }
 }

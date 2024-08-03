@@ -11,7 +11,7 @@ public class FileUtils
 {
     public static final File[] EMPTY_FILE_ARRAY = new File[0];
 
-    public static File[] getFileList(File path, boolean recursive)
+    public static File[] getFileList(File path, int depth)
     {
         List<File> fileList = new ArrayList<>();
 
@@ -19,9 +19,9 @@ public class FileUtils
 
         for (File file : ((listOfFile == null) ? EMPTY_FILE_ARRAY : listOfFile))
         {
-            if (file.isDirectory() && recursive)
+            if (file.isDirectory() && (depth != 0))
             {
-                fileList.addAll(Arrays.asList(getFileList(file, true)));
+                fileList.addAll(Arrays.asList(getFileList(file, (depth - 1))));
             }
             else if (file.isFile())
             {

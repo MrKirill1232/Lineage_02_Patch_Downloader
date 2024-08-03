@@ -15,8 +15,8 @@ public class CompareBothSystems
 {
     public static void startComparing(File pathToFirstSystem, File pathToSecondSystem)
     {
-        File[] filesOfFSystem = FileUtils.getFileList(pathToFirstSystem , true);
-        File[] filesOfSSystem = FileUtils.getFileList(pathToSecondSystem, true);
+        File[] filesOfFSystem = FileUtils.getFileList(pathToFirstSystem , 2);
+        File[] filesOfSSystem = FileUtils.getFileList(pathToSecondSystem, 2);
 
         Map<String, File> mapOfFirstSystem  = getPatchLikeMapOfFiles(pathToFirstSystem  , filesOfFSystem);
         Map<String, File> mapOfSecondSystem = getPatchLikeMapOfFiles(pathToSecondSystem , filesOfSSystem);

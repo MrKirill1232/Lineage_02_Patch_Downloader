@@ -31,7 +31,7 @@ public class ConditionRestoreDownload implements ICondition
         {
             return;
         }
-        File[] fileList = FileUtils.getFileList(MainConfig.DOWNLOAD_PATH, true);
+        File[] fileList = FileUtils.getFileList(MainConfig.DOWNLOAD_PATH, MainConfig.DEPTH_OF_FILE_CHECK);
         for (File file : fileList)
         {
             String pathAndName  = getPathAndName(file).toLowerCase().replaceAll("\\\\", "/");
