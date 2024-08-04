@@ -37,7 +37,14 @@ public class DownloadManager extends AbstractQueueManager
             return;
         }
         DownloadRequest downloadRequest = (DownloadRequest) request;
-        download(downloadRequest);
+        DownloadRequest downloaded = download(downloadRequest);
+        if (downloaded == null)
+        {
+            downloadRequest.setHttpStatus(-1);
+            System.out.println("Trying to re-start downloading for file: '" + downloadRequest.getLinkPath() + "';");
+            addRequestToQueue(downloadRequest);
+            return;
+        }
         downloadRequest.onComplete();
     }
 

@@ -56,7 +56,7 @@ public class DownloadFiles implements IRequestor
             if (!FileUtils.createSubFolders(MainConfig.DOWNLOAD_PATH, linkHolder))
             {
                 _simpleCounter.addAndGet(1);
-                System.out.println("Cannot create a " + ("/" + linkHolder.getFilePath() + "/" + linkHolder.getFileName()) + ". Ignoring.");
+                System.out.println("Cannot create a " + (linkHolder.getLinkPath()) + ". Ignoring.");
                 continue;
             }
 
@@ -85,17 +85,17 @@ public class DownloadFiles implements IRequestor
 
         if (MainConfig.CHECK_FILE_SIZE &&  decodeRequest.getLinkHolder().getOriginalFileLength() != 0 && (decodeRequest.getDecodedArray().length != decodeRequest.getLinkHolder().getOriginalFileLength()))
         {
-            System.out.println("File " + (decodeRequest.getLinkHolder().getFilePath() + "/" + decodeRequest.getLinkHolder().getFileName()) + " have different length than expected!");
+            System.out.println("File " + (decodeRequest.getLinkPath()) + " have different length than expected!");
         }
         if (MainConfig.CHECK_HASH_SUM)
         {
             if (decodeRequest.getLinkHolder().getOriginalFileHashsum() == null)
             {
-                System.out.println("File " + (decodeRequest.getLinkHolder().getFilePath() + "/" + decodeRequest.getLinkHolder().getFileName()) + " do not have hashsum in file map.");
+                System.out.println("File " + (decodeRequest.getLinkPath()) + " do not have hashsum in file map.");
             }
             if (!CheckSumManager.check(decodeRequest.getDecodedArray(), decodeRequest.getLinkHolder().getOriginalFileHashsum()))
             {
-                System.out.println("File " + (decodeRequest.getLinkHolder().getFilePath() + "/" + decodeRequest.getLinkHolder().getFileName()) + " not match hash sum with original file.");
+                System.out.println("File " + (decodeRequest.getLinkPath()) + " not match hash sum with original file.");
             }
         }
 
@@ -132,11 +132,11 @@ public class DownloadFiles implements IRequestor
         {
             if (acmiLike)
             {
-                System.out.println(linkHolder.getFilePath() + "/" + linkHolder.getFileName() + ": OK");
+                System.out.println(linkHolder.getLinkPath() + ": OK");
             }
             else
             {
-                System.out.println("Progress " + percentCounter + "% / 100%" + "Storing " + ("/" + linkHolder.getFilePath() + "/" + linkHolder.getFileName()) + "...");
+                System.out.println("Progress " + percentCounter + "% / 100%" + " | " + "Storing " + (linkHolder.getLinkPath()) + "...");
             }
         }
     }

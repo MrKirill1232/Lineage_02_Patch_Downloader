@@ -36,7 +36,8 @@ public class DecodeManager extends AbstractQueueManager
             return;
         }
         DecodeRequest decodeRequest = (DecodeRequest) request;
-        decodeRequest.setDecodedArray(decode(decodeRequest.getDownloadRequest()));
+        byte[] decoded = decode(decodeRequest.getDownloadRequest());
+        decodeRequest.setDecodedArray(decoded);
         decodeRequest.onComplete();
     }
 
@@ -65,6 +66,28 @@ public class DecodeManager extends AbstractQueueManager
         if (request.getLinkHolder().getOriginalFileLength() == totalArrayLength)
         {
             return encodeBuffer.array();
+        }
+
+        if (getPropertiesByte(encodeArray[0]) > (4 * 5 + 4) * 9 + 8)
+        {
+            // look implementation on org/tukaani/xz/LZMAInputStream.initialize
+            // int props = propsByte & 0xFF;
+            // if (props > (4 * 5 + 4) * 9 + 8)
+            //   throw new CorruptedInputException("Invalid LZMA properties byte");
+            System.out.println("Cannot decode input array by LZMA method. Reason: " + "Properties byte is invalid. File '" + request.getLinkPath() + "';");
+            return encodeBuffer.array();
+        }
+        if (true)
+        {
+            int dictionarySize = getDictionarySize(encodeArray[0]);
+            // look implementation on org/tukaani/xz/LZMAInputStream.initialize
+            // Validate the dictionary size since the other "initialize" throws
+            // IllegalArgumentException if dictSize is not supported.
+            if (dictionarySize < 0 || dictionarySize > LZMAInputStream.DICT_SIZE_MAX)
+            {
+                System.out.println("Cannot decode input array by LZMA method. Reason: " + "LZMA dictionary is too big for this implementation. File '" + request.getLinkPath() + "';");
+                return encodeBuffer.array();
+            }
         }
 
         return decode(encodeBuffer.array());
@@ -96,6 +119,22 @@ public class DecodeManager extends AbstractQueueManager
             ioException.printStackTrace();
         }
         return new byte[0];
+    }
+
+    private static int getPropertiesByte(byte[] input)
+    {
+        return input[0] & 0xFF;
+    }
+
+    private static int getDictionarySize(byte[] input)
+    {
+        // readByte;        // Properties byte (lc, lp, and pb)
+        int dictSize = 0;
+        for (int index = 0; index < 4; ++index)
+        {
+            dictSize |= (input[index + 1] & 255) << (8 * index);
+        }
+        return dictSize;
     }
 
     private static int getUnCompressSize(byte[] input)

@@ -122,88 +122,9 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
                 linkHolder.setNamesOfFiles(sIndex, getNameOfFile(pathUndName, false, false));
                 linkHolder.setAccessLink(sIndex, formatGetUrl(pathUndName));
                 linkHolder.setFileLength(sIndex, Integer.parseInt(fileLength));
-                _fileMapHolder.put((linkHolder.getFilePath() + linkHolder.getFileName()).toLowerCase(), linkHolder);
+                _fileMapHolder.put((linkHolder.getLinkPath()).toLowerCase(), linkHolder);
             }
         }
-        System.currentTimeMillis();
-
-    }
-
-    private void parseFileListDEPRECATED(DownloadRequest request)
-    {
-        String fileInfo = new String(request.getDownloadedByteArray()[0], StandardCharsets.UTF_16LE);
-        String[] lines = fileInfo.split("\r\n");
-
-        for (int index = 0; index < lines.length; index++)
-        {
-            String line = lines[index];
-
-            // Zip\Animations\br_BranchPC.ukx.zip:2485132:77c775e81bf5ab2d8a6f7528956f4f9d4f9fd767:1
-            // Zip\Animations\branch.ukx.z01:20971520:97b10469ac43ef43808ea697daa8014eb3874d46:1
-            // Zip\Animations\branch.ukx.z02:20971520:3efccb275fb4fe85d6834bc03cd6c144f91a4f57:1
-            String  pathAndName = line.split(":", 2)[0];
-            int     typeOfFile  = Integer.parseInt(line.substring(line.length() - 1));
-            boolean isSeparated = typeOfFile == FileTypeByLink.SEPARATED.ordinal() && Character.isDigit(pathAndName.charAt(pathAndName.length() - 1));
-            int     part        = isSeparated ? Integer.parseInt(pathAndName.substring(pathAndName.length() - 2)) : -1;
-            if (part > 0)
-            {   // костыль, не получается нормально избегать дублей в мапе.
-                continue;
-            }
-            int countOfSeparatedFiles;
-
-            if (isSeparated)
-            {
-                String nameOfPart = pathAndName.substring(0, pathAndName.length() - 2) + "%02d";
-                int separateCounter = index;
-                while (true)
-                {
-                    String checkPart = String.format(nameOfPart, ((separateCounter - index) + 1));
-                    line = lines[separateCounter];
-                    if (!line.startsWith(checkPart))
-                    {
-                        break;
-                    }
-                    separateCounter += 1;
-                }
-                countOfSeparatedFiles = (separateCounter - index) + 1;
-            }
-            else
-            {
-                countOfSeparatedFiles = 1;
-            }
-
-            line = lines[index].split(":", 2)[0];
-
-            LinkHolder linkHolder = new LinkHolder(getNameOfFile(line, (isSeparated && countOfSeparatedFiles > 1), false), getPathOfFile(line), FileTypeByLink.values()[typeOfFile], countOfSeparatedFiles);
-
-            for (int sIndex = 0; sIndex < countOfSeparatedFiles; sIndex++)
-            {
-                try
-                {
-                    line = lines[index];
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-                String[] splitLineInfo = line.split(":", 5);
-                if (splitLineInfo.length != 4)
-                {
-                    throw new IllegalArgumentException("[path]:[size]:[sha-1 hash]:[file_type]. Structure is not full!");
-                }
-                String  pathUndName = splitLineInfo[0];
-                String  fileLength  = splitLineInfo[1];
-                String  hashCode    = splitLineInfo[2];
-
-                linkHolder.setAccessLink(sIndex, String.format(_cdnLinkType.getGeneralCdnLink(), _patchVersion, pathUndName));
-                linkHolder.setFileLength(sIndex, Integer.parseInt(fileLength));
-                linkHolder.setNamesOfFiles(sIndex, getNameOfFile(pathUndName, false, false));
-
-                _fileMapHolder.put(linkHolder.getFileName(), linkHolder);
-            }
-            System.out.println(index);
-        }
-        System.currentTimeMillis();
     }
 
     protected void parseHashList(DownloadRequest request)

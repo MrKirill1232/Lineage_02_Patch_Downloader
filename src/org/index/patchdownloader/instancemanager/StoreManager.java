@@ -33,7 +33,7 @@ public class StoreManager extends AbstractQueueManager
             return;
         }
         StoreRequest storeRequest = (StoreRequest) request;
-        File storeFile = new File(MainConfig.DOWNLOAD_PATH, storeRequest.getSavePath());
+        File storeFile = new File(MainConfig.DOWNLOAD_PATH, storeRequest.getLinkPath());
         store(storeFile, storeRequest.getStorableByteArray());
         request.onComplete();
     }

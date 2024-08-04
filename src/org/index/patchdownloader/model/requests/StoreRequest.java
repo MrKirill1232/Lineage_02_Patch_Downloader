@@ -27,11 +27,6 @@ public class StoreRequest implements IRequest
         return _storableByteArray;
     }
 
-    public String getSavePath()
-    {
-        return getDownloadRequest().getLinkHolder().getFilePath() + getDownloadRequest().getLinkHolder().getFileName();
-    }
-
     @Override
     public void onComplete()
     {

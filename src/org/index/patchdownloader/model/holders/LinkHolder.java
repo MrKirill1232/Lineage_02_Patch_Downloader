@@ -38,6 +38,17 @@ public class LinkHolder
         return _filePath;
     }
 
+    public String getLinkPath()
+    {
+        String path = getFilePath();
+        String name = getFileName();
+        if (path.charAt(path.length() - 1) == '/')
+        {
+            return path + name;
+        }
+        return path + "/" + name;
+    }
+
     public FileTypeByLink getLinkType()
     {
         return _linkType;

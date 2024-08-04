@@ -38,7 +38,7 @@ public class FileUtils
         {
             return false;
         }
-        if (new File(originalFolder, ("/" + linkHolder.getFilePath() + "/" + linkHolder.getFileName())).exists())
+        if (new File(originalFolder, (linkHolder.getLinkPath())).exists())
         {
             return true;
         }
