@@ -1,5 +1,6 @@
 package org.index.patchdownloader.instancemanager;
 
+import org.index.patchdownloader.interfaces.IRequest;
 import org.index.patchdownloader.model.requests.DecodeRequest;
 import org.index.patchdownloader.model.requests.DownloadRequest;
 import org.tukaani.xz.LZMAInputStream;
@@ -7,35 +8,36 @@ import org.tukaani.xz.LZMAInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class DecodeManager
+public class DecodeManager extends AbstractQueueManager
 {
-    private final int _parallelDecodeCount;
+    private final static DecodeManager INSTANCE = new DecodeManager();
 
-    private final Queue<DecodeRequest> _requestQueue;
-
-    private DecodeManager(int parallelDecodeCount)
+    public static DecodeManager getInstance()
     {
-        _parallelDecodeCount = parallelDecodeCount;
-        _requestQueue = new ConcurrentLinkedQueue<>();
+        return INSTANCE;
     }
 
-    public void addToDecode(DecodeRequest request)
+    private DecodeManager()
     {
-        _requestQueue.add(request);
+
     }
 
-    public void startDecode()
+    @Override
+    public void runQueueEntry()
     {
-        DecodeRequest request = _requestQueue.poll();
+        IRequest request = _requestQueue.poll();
         if (request == null)
         {
             return;
         }
-        request.setDecodedArray(decode(request.getDownloadRequest()));
-        request.onComplete();
+        if (!request.getClass().equals(DecodeRequest.class))
+        {
+            return;
+        }
+        DecodeRequest decodeRequest = (DecodeRequest) request;
+        decodeRequest.setDecodedArray(decode(decodeRequest.getDownloadRequest()));
+        decodeRequest.onComplete();
     }
 
     public static byte[] decode(DownloadRequest request)
@@ -91,7 +93,7 @@ public class DecodeManager
         }
         catch (IOException ioException)
         {
-
+            ioException.printStackTrace();
         }
         return new byte[0];
     }

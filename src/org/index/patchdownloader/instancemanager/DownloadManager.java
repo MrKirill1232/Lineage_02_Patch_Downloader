@@ -1,5 +1,6 @@
 package org.index.patchdownloader.instancemanager;
 
+import org.index.patchdownloader.interfaces.IRequest;
 import org.index.patchdownloader.model.requests.DownloadRequest;
 
 import java.io.IOException;
@@ -9,42 +10,35 @@ import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.NoSuchElementException;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class DownloadManager
+public class DownloadManager extends AbstractQueueManager
 {
-    private final static DownloadManager INSTANCE = new DownloadManager(1);
+    private final static DownloadManager INSTANCE = new DownloadManager();
 
     public static DownloadManager getInstance()
     {
         return INSTANCE;
     }
 
-    private final int _parallelDownloadsCount;
-
-    private final Queue<DownloadRequest> _requestQueue;
-
-    private DownloadManager(int parallelDownloadsCount)
+    private DownloadManager()
     {
-        _parallelDownloadsCount = parallelDownloadsCount;
-        _requestQueue = new ConcurrentLinkedQueue<>();
     }
 
-    public void addToDownload(DownloadRequest request)
+    @Override
+    public void runQueueEntry()
     {
-        _requestQueue.add(request);
-    }
-
-    public void startDownload()
-    {
-        DownloadRequest request = _requestQueue.poll();
+        IRequest request = _requestQueue.poll();
         if (request == null)
         {
             return;
         }
-        download(request);
-        request.onComplete();
+        if (!request.getClass().equals(DownloadRequest.class))
+        {
+            return;
+        }
+        DownloadRequest downloadRequest = (DownloadRequest) request;
+        download(downloadRequest);
+        downloadRequest.onComplete();
     }
 
     public static DownloadRequest download(DownloadRequest request)

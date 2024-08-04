@@ -40,16 +40,11 @@ public class DownloadRequest implements IRequest
 
     @Override
     public void onComplete()
-    {;
+    {
         if (_requestor != null)
         {
             _requestor.onDownload(this);
         }
-    }
-
-    public LinkHolder getLinkHolder()
-    {
-        return _linkHolder;
     }
 
     public int getHttpStatus()
@@ -65,5 +60,11 @@ public class DownloadRequest implements IRequest
     public boolean isComplete()
     {
         return _httpStatus == 200 && !(_downloadedByteArray == null || _downloadedByteArray.length == 0);
+    }
+
+    @Override
+    public LinkHolder getLinkHolder()
+    {
+        return _linkHolder;
     }
 }

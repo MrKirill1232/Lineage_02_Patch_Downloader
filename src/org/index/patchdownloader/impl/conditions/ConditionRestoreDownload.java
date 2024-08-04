@@ -31,6 +31,7 @@ public class ConditionRestoreDownload implements ICondition
         {
             return;
         }
+        System.out.println("Warning! Program is working. Now program check all the files inside '" + MainConfig.DOWNLOAD_PATH + "' folder. It can take some time.");
         File[] fileList = FileUtils.getFileList(MainConfig.DOWNLOAD_PATH, MainConfig.DEPTH_OF_FILE_CHECK);
         for (File file : fileList)
         {
@@ -65,6 +66,7 @@ public class ConditionRestoreDownload implements ICondition
                 _excludeFileList.add(pathAndName);
             }
         }
+        System.out.println("Warning! Program is working. Exclude File List formed.");
     }
 
     private static String getPathAndName(File file)
@@ -84,17 +86,4 @@ public class ConditionRestoreDownload implements ICondition
         }
         return !_excludeFileList.contains((filePath + "/" + linkHolder.getFileName()).toLowerCase());
     }
-
-//    public static void main(String[] args)
-//    {
-//        MainConfigParser.getInstance().load();
-//        MainConfig.CHECK_BY_HASH_SUM = true;
-//
-//        GeneralLinkGenerator taiwanLinkGenerator = GeneralLinkGenerator.generateLinkToFiles(CDNLink.NC_SOFT_JAPANESE, 101);
-//        taiwanLinkGenerator.load();
-//
-//        ConditionRestoreDownload restoreDownload = new ConditionRestoreDownload(taiwanLinkGenerator);
-//
-//        System.out.println();
-//    }
 }

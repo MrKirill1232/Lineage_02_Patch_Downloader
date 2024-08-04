@@ -2,6 +2,7 @@ package org.index.patchdownloader.model.requests;
 
 import org.index.patchdownloader.interfaces.IRequest;
 import org.index.patchdownloader.interfaces.IRequestor;
+import org.index.patchdownloader.model.holders.LinkHolder;
 
 public class StoreRequest implements IRequest
 {
@@ -38,5 +39,11 @@ public class StoreRequest implements IRequest
         {
             _requestor.onStore(this);
         }
+    }
+
+    @Override
+    public LinkHolder getLinkHolder()
+    {
+        return _downloadRequest == null ? null : _downloadRequest.getLinkHolder();
     }
 }

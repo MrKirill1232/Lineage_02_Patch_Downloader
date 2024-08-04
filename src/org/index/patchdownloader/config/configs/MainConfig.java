@@ -26,6 +26,9 @@ public class MainConfig implements IConfig
     @ConfigParameter(parameterName = "developer")
     public static boolean DEVELOPER = false;
 
+    @ConfigParameter(parameterName = "thread_usage")
+    public static boolean THREAD_USAGE = true;
+
     @ConfigParameter(parameterName = "parallel_downloading")
     public static int PARALLEL_DOWNLOADING = 1;
 
@@ -37,6 +40,9 @@ public class MainConfig implements IConfig
 
     @ConfigParameter(parameterName = "check_hash_sum")
     public static boolean CHECK_HASH_SUM = false;
+
+    @ConfigParameter(parameterName = "check_file_size")
+    public static boolean CHECK_FILE_SIZE = false;
 
     @ConfigParameter(parameterName = "restore_downloading")
     public static boolean RESTORE_DOWNLOADING = false;
@@ -69,6 +75,9 @@ public class MainConfig implements IConfig
     // -1 - ignore depth
     @ConfigParameter(parameterName = "depth_of_file_check")
     public static int DEPTH_OF_FILE_CHECK = 3;
+
+    @ConfigParameter(parameterName = "acmi_like_logging")
+    public static boolean ACMI_LIKE_LOGGING = false;
 
     @Override
     public void onLoad()

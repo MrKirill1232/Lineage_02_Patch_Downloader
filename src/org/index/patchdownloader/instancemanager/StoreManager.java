@@ -1,39 +1,40 @@
 package org.index.patchdownloader.instancemanager;
 
 import org.index.patchdownloader.config.configs.MainConfig;
+import org.index.patchdownloader.interfaces.IRequest;
 import org.index.patchdownloader.model.requests.StoreRequest;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class StoreManager
+public class StoreManager extends AbstractQueueManager
 {
-    private final int _parallelStoreCount;
+    private final static StoreManager INSTANCE = new StoreManager();
 
-    private final Queue<StoreRequest> _requestQueue;
-
-    private StoreManager(int parallelStoreCount)
+    public static StoreManager getInstance()
     {
-        _parallelStoreCount = parallelStoreCount;
-        _requestQueue = new ConcurrentLinkedQueue<>();
+        return INSTANCE;
     }
 
-    public void addToQueue(StoreRequest storeRequest)
+    private StoreManager()
     {
-        _requestQueue.add(storeRequest);
     }
 
-    public void startQueue()
+    @Override
+    public void runQueueEntry()
     {
-        StoreRequest request = _requestQueue.poll();
+        IRequest request = _requestQueue.poll();
         if (request == null)
         {
             return;
         }
-        File storeFile = new File(MainConfig.DOWNLOAD_PATH, request.getSavePath());
-        store(storeFile, request.getStorableByteArray());
+        if (!request.getClass().equals(StoreRequest.class))
+        {
+            return;
+        }
+        StoreRequest storeRequest = (StoreRequest) request;
+        File storeFile = new File(MainConfig.DOWNLOAD_PATH, storeRequest.getSavePath());
+        store(storeFile, storeRequest.getStorableByteArray());
         request.onComplete();
     }
 

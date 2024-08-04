@@ -2,6 +2,7 @@ package org.index.patchdownloader.model.requests;
 
 import org.index.patchdownloader.interfaces.IRequest;
 import org.index.patchdownloader.interfaces.IRequestor;
+import org.index.patchdownloader.model.holders.LinkHolder;
 
 public class DecodeRequest implements IRequest
 {
@@ -59,5 +60,11 @@ public class DecodeRequest implements IRequest
         {
             _requestor.onDecode(this);
         }
+    }
+
+    @Override
+    public LinkHolder getLinkHolder()
+    {
+        return _downloadRequest == null ? null : _downloadRequest.getLinkHolder();
     }
 }

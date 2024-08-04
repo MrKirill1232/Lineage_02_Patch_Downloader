@@ -75,7 +75,7 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
         {
             String  pathAndName = line.split(":", 2)[0];
             int     typeOfFile  = Integer.parseInt(line.substring(line.length() - 1));
-            boolean isSeparated = typeOfFile == FileTypeByLink.SEPARATED.ordinal() && Character.isDigit(pathAndName.charAt(pathAndName.length() - 1));
+            boolean isSeparated = (typeOfFile == FileTypeByLink.SEPARATED.ordinal() || typeOfFile == FileTypeByLink.UNK_04.ordinal()) && Character.isDigit(pathAndName.charAt(pathAndName.length() - 1));
             String  nameOfPart  = isSeparated ? pathAndName.substring(0, pathAndName.length() - 2) + "%02d" : pathAndName;
             int     countOfSeparatedFiles;
             if (isSeparated)
@@ -106,7 +106,11 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
 
             for (int sIndex = 0; sIndex < countOfSeparatedFiles; sIndex++)
             {
-                String lookingInfo = isSeparated && sIndex != 1 ? stringMapOfValues.get(String.format(nameOfPart, (sIndex + 1))) : line;
+                if (line.contains("HighElf"))
+                {
+                    System.out.println();
+                }
+                String lookingInfo = isSeparated && countOfSeparatedFiles > 1 ? stringMapOfValues.get(String.format(nameOfPart, (sIndex + 1))) : line;
                 String[] splitLineInfo = lookingInfo.split(":", 5);
                 if (splitLineInfo.length != 4)
                 {
@@ -298,7 +302,7 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
         int patchVer= getPatchVersion(pathAndName);
         if (path.isEmpty())
         {
-            return String.format(_cdnLinkType.getGeneralCdnLink(), _patchVersion, name);
+            return String.format(_cdnLinkType.getGeneralCdnLink(), _patchVersion, pathAndName);
         }
         if (patchVer != _patchVersion)
         {
