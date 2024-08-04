@@ -50,17 +50,6 @@ public interface ICondition
         {
             conditionList.add(new ConditionRestoreDownload(generalLinkGenerator));
         }
-        if (MainConfig.INCLUDE_FILE_FILTER != null)
-        {
-            for (String filter : MainConfig.INCLUDE_FILE_FILTER.split(";"))
-            {
-                if (filter.isEmpty() || filter.isBlank())
-                {
-                    continue;
-                }
-                conditionList.add(new ConditionName(true, filter));
-            }
-        }
         if (MainConfig.EXCLUDE_FILE_FILTER != null)
         {
             for (String filter : MainConfig.EXCLUDE_FILE_FILTER.split(";"))
@@ -70,6 +59,17 @@ public interface ICondition
                     continue;
                 }
                 conditionList.add(new ConditionName(false, filter));
+            }
+        }
+        if (MainConfig.INCLUDE_FILE_FILTER != null)
+        {
+            for (String filter : MainConfig.INCLUDE_FILE_FILTER.split(";"))
+            {
+                if (filter.isEmpty() || filter.isBlank())
+                {
+                    continue;
+                }
+                conditionList.add(new ConditionName(true, filter));
             }
         }
         return conditionList;
