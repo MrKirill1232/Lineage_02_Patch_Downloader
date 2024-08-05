@@ -7,12 +7,10 @@ import org.index.patchdownloader.model.holders.LinkInfoHolder;
 import org.index.patchdownloader.model.requests.DownloadRequest;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
 import java.net.URI;
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.NoSuchElementException;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 
 public class DownloadManager extends AbstractQueueManager
 {
@@ -23,12 +21,32 @@ public class DownloadManager extends AbstractQueueManager
         return INSTANCE;
     }
 
+    private HttpClient[] _clients = null;
+
     private DownloadManager()
     {
     }
 
     @Override
-    public void runQueueEntry()
+    public void initThreadPool(int corePoolSize, int threadCount)
+    {
+        if (_clients != null)
+        {
+            for (HttpClient httpClient : _clients)
+            {
+                httpClient.close();
+            }
+        }
+        _clients = new HttpClient[threadCount];
+        for (int index = 0; index < threadCount; index++)
+        {
+            _clients[index] = HttpClient.newHttpClient();
+        }
+        super.initThreadPool(corePoolSize, threadCount);
+    }
+
+    @Override
+    public void runQueueEntry(int threadId)
     {
         IRequest request = _requestQueue.poll();
         if (request == null)
@@ -39,8 +57,9 @@ public class DownloadManager extends AbstractQueueManager
         {
             return;
         }
+        HttpClient httpClient = getHttpClient(threadId);
         DownloadRequest downloadRequest = (DownloadRequest) request;
-        DownloadRequest downloaded = download(downloadRequest);
+        DownloadRequest downloaded = download(httpClient, downloadRequest);
         if (downloaded == null && (MainConfig.MAX_DOWNLOAD_ATTEMPTS == -1 || downloadRequest.getDownloadingAttempts() <= MainConfig.MAX_DOWNLOAD_ATTEMPTS))
         {
             downloadRequest.getFileInfoHolder().getAccessLink().setHttpStatus(-1);
@@ -52,7 +71,41 @@ public class DownloadManager extends AbstractQueueManager
         downloadRequest.onComplete();
     }
 
-    public static DownloadRequest download(DownloadRequest request)
+    private HttpClient getHttpClient(int threadId)
+    {
+        HttpClient httpClient = null;
+        if (_clients == null && _executor == null)
+        {
+            _clients = new HttpClient[1];
+            httpClient = (_clients[0] = HttpClient.newHttpClient());
+        }
+        else if (_executor == null && threadId == -1)
+        {
+            httpClient = _clients[0];
+            if (httpClient == null || httpClient.isTerminated())
+            {
+                httpClient = (_clients[0] = HttpClient.newHttpClient());
+            }
+        }
+        else if (_clients != null)
+        {
+            if (threadId == -1 || _clients.length <= threadId)
+            {
+                httpClient = null;
+            }
+            else
+            {
+                httpClient = _clients[threadId];
+                if (httpClient == null || httpClient.isTerminated())
+                {
+                    httpClient = (_clients[threadId] = HttpClient.newHttpClient());
+                }
+            }
+        }
+        return httpClient;
+    }
+
+    public static DownloadRequest download(HttpClient client, DownloadRequest request)
     {
         try
         {
@@ -60,8 +113,7 @@ public class DownloadManager extends AbstractQueueManager
             {
                 FileInfoHolder infoHolder = request.getFileInfoHolder();
                 String accessLink = infoHolder.getAccessLink().getAccessLink();
-                int byteLength = infoHolder.getDownloadDataLength();
-                byte[] downloaded = downloadImpl(infoHolder.getAccessLink(), accessLink, byteLength);
+                byte[] downloaded = downloadImplByClient(infoHolder.getAccessLink(), client, accessLink);
                 request.addDownloadedPart(0, downloaded);
             }
             else
@@ -70,67 +122,37 @@ public class DownloadManager extends AbstractQueueManager
                 {
                     FileInfoHolder infoHolder = request.getFileInfoHolder().getAllSeparatedParts()[index];
                     String accessLink = infoHolder.getAccessLink().getAccessLink();
-                    int byteLength = infoHolder.getDownloadDataLength();
-                    byte[] downloaded = downloadImpl(infoHolder.getAccessLink(), accessLink, byteLength);
+                    byte[] downloaded = downloadImplByClient(infoHolder.getAccessLink(), client, accessLink);
                     request.addDownloadedPart(index, downloaded);
                 }
             }
             return request;
         }
-        catch (IOException e)
+        catch (Exception e)
         {
             e.printStackTrace();
         }
         return null;
     }
 
-    private static byte[] downloadImpl(LinkInfoHolder linkInfo, String accessLink, int byteLength) throws IOException
+    private static byte[] downloadImplByClient(LinkInfoHolder linkInfo, HttpClient client, String accessLink) throws IOException, InterruptedException
     {
-        URI uriLink = URI.create(accessLink);
-        HttpURLConnection urlConnection = (HttpURLConnection) uriLink.toURL().openConnection();
-        urlConnection.setRequestMethod("GET");
-        linkInfo.setHttpStatus(urlConnection.getResponseCode());
-        if (linkInfo.getHttpStatus() != 200)
+        HttpRequest.Builder builder = HttpRequest.newBuilder();
+        builder.uri(URI.create(accessLink));
+        builder.GET();
+        if (MainConfig.REQUESTED_USER_AGENT != null)
         {
-            throw new NoSuchElementException("Patch version is not available. Requested link: " + accessLink);
+            builder.header("User-Agent", MainConfig.REQUESTED_USER_AGENT);
         }
-
-        linkInfo.setHttpLength(urlConnection.getContentLength());
-
-        int finalLength;
-        if (byteLength == -1)
+        HttpRequest request = builder.build();
+        HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        byte[] downloadedArray = response.body();
+        if (linkInfo != null)
         {
-            if (linkInfo.getHttpLength() == -1)
-            {
-                // finalLength = 20_971_520;
-                finalLength = 20_975_368;
-            }
-            else
-            {
-                finalLength = linkInfo.getHttpLength();
-            }
+            linkInfo.setHttpStatus(response.statusCode());
+            // linkInfo.setHttpLength((int) response.headers().firstValueAsLong("content-length").orElse(-1));
+            linkInfo.setHttpLength(downloadedArray.length);
         }
-        else
-        {
-            finalLength = byteLength;
-        }
-
-        InputStream is = urlConnection.getInputStream();
-        ByteBuffer buffer = ByteBuffer.allocate(finalLength + 1);
-
-        while (true)
-        {
-            byte[] bytes = new byte[1024];
-            int status = is.read(bytes);
-            if (status == -1)
-            {
-                break;
-            }
-            buffer.put(bytes, 0, status);
-        }
-
-        urlConnection.disconnect();
-
-        return Arrays.copyOfRange(buffer.array(), 0, buffer.position());
+        return downloadedArray;
     }
 }

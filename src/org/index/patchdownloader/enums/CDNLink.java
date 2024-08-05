@@ -13,6 +13,8 @@ public enum CDNLink
     // http://d35293xeakkyq4.cloudfront.net/LINEAGE2/479/Patch/FileInfoMap_LINEAGE2_479.dat.zip
     // [Request URI: http://d35293xeakkyq4.cloudfront.net/LINEAGE2/479/Patch/PatchFileInfo_LINEAGE2_479.dat.zip]
     NC_SOFT_AMERICA("http://d35293xeakkyq4.cloudfront.net/LINEAGE2/%d/Patch/%s", "http://d35293xeakkyq4.cloudfront.net/LINEAGE2/%d/Patch/PatchFileInfo_LINEAGE2_%d.dat"),
+
+    UP_NOVA_LAUNCHER(null, null);
     ;
 
     private final String _generalCdnLink;

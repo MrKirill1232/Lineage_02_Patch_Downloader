@@ -21,7 +21,7 @@ public class StoreManager extends AbstractQueueManager
     }
 
     @Override
-    public void runQueueEntry()
+    public void runQueueEntry(int threadId)
     {
         IRequest request = _requestQueue.poll();
         if (request == null)

@@ -11,6 +11,7 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
+import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.util.NoSuchElementException;
 
@@ -24,6 +25,10 @@ public class NcKoreanLinkGenerator extends GeneralLinkGenerator
     @Override
     public void load()
     {
+        HttpClient httpClient = HttpClient.newHttpClient();
+
+        //------------------------------------------------------------------------------------------------------//
+
         String url = String.format(_cdnLinkType.getCdnFileListLink(), _patchVersion);
 
         FileInfoHolder fileListInfo = new FileInfoHolder("files_info.json.zip", "", false, 0);
@@ -31,8 +36,12 @@ public class NcKoreanLinkGenerator extends GeneralLinkGenerator
         fileListInfo.setAccessLink(new LinkInfoHolder(fileListInfo));
         fileListInfo.getAccessLink().setAccessLink(url);
 
-        DownloadRequest fileListRequest = DownloadManager.download(new DownloadRequest(null, fileListInfo));
+        DownloadRequest fileListRequest = DownloadManager.download(HttpClient.newHttpClient(), new DownloadRequest(null, fileListInfo));
         parseFileList(fileListRequest);
+
+        //------------------------------------------------------------------------------------------------------//
+
+        httpClient.close();
     }
 
     private void parseFileList(DownloadRequest request)

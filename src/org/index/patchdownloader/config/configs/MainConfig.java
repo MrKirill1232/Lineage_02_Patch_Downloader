@@ -79,8 +79,14 @@ public class MainConfig implements IConfig
     @ConfigParameter(parameterName = "acmi_like_logging")
     public static boolean ACMI_LIKE_LOGGING = false;
 
-    @ConfigParameter(parameterName = "max_download_attempts", ignoredParameter = true)
+    @ConfigParameter(parameterName = "max_download_attempts")
     public static int MAX_DOWNLOAD_ATTEMPTS = 2;
+
+    @ConfigParameter(parameterName = "requested_user_agent", canBeNull = true)
+    public static String REQUESTED_USER_AGENT = null;
+
+    @ConfigParameter(parameterName = "up_nova_launcher_url", canBeNull = true)
+    public static String UP_NOVA_LAUNCHER_URL = null;
 
     @Override
     public void onLoad()

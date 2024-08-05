@@ -7,6 +7,7 @@ import org.index.patchdownloader.model.holders.LinkInfoHolder;
 import org.index.patchdownloader.model.requests.DownloadRequest;
 import org.index.patchdownloader.instancemanager.DownloadManager;
 
+import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -26,6 +27,11 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
     @Override
     public void load()
     {
+        HttpClient httpClient;
+        //------------------------------------------------------------------------------------------------------//
+        httpClient = HttpClient.newHttpClient();
+        //------------------------------------------------------------------------------------------------------//
+
         String fileListUrl = String.format(_cdnLinkType.getCdnFileListLink(), _patchVersion, _patchVersion);
 
         FileInfoHolder fileListInfo = new FileInfoHolder(getFileListFileName(), "", false, 0);
@@ -33,9 +39,16 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
         fileListInfo.setAccessLink(new LinkInfoHolder(fileListInfo));
         fileListInfo.getAccessLink().setAccessLink(fileListUrl);
 
-        DownloadRequest fileListRequest = DownloadManager.download(new DownloadRequest(null, fileListInfo));
+        DownloadRequest fileListRequest = DownloadManager.download(httpClient, new DownloadRequest(null, fileListInfo));
+
+        //------------------------------------------------------------------------------------------------------//
+        httpClient.close();
+        //------------------------------------------------------------------------------------------------------//
+
         parseFileList(fileListRequest);
 
+        //------------------------------------------------------------------------------------------------------//
+        httpClient = HttpClient.newHttpClient();
         //------------------------------------------------------------------------------------------------------//
 
         String fileMapUrl = String.format(_cdnLinkType.getGeneralCdnLink(), _patchVersion, getFileListFileHash());
@@ -45,7 +58,12 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
         fileMapInfo.setAccessLink(new LinkInfoHolder(fileMapInfo));
         fileMapInfo.getAccessLink().setAccessLink(fileMapUrl);
 
-        DownloadRequest fileMapRequest = DownloadManager.download(new DownloadRequest(null, fileMapInfo));
+        DownloadRequest fileMapRequest = DownloadManager.download(httpClient, new DownloadRequest(null, fileMapInfo));
+
+        //------------------------------------------------------------------------------------------------------//
+        httpClient.close();
+        //------------------------------------------------------------------------------------------------------//
+
         parseHashList(fileMapRequest);
     }
 

@@ -60,7 +60,7 @@ public class DownloadFiles implements IRequestor
             DownloadManager.getInstance().addRequestToQueue(new DownloadRequest(this, fileInfoHolder));
             if (!MainConfig.THREAD_USAGE)
             {
-                DownloadManager.getInstance().runQueueEntry();
+                DownloadManager.getInstance().runQueueEntry(-1);
             }
         }
     }
@@ -71,7 +71,7 @@ public class DownloadFiles implements IRequestor
         DecodeManager.getInstance().addRequestToQueue(new DecodeRequest(this, (DownloadRequest) request));
         if (!MainConfig.THREAD_USAGE)
         {
-            DecodeManager.getInstance().runQueueEntry();
+            DecodeManager.getInstance().runQueueEntry(-1);
         }
     }
 
@@ -83,7 +83,7 @@ public class DownloadFiles implements IRequestor
         if (MainConfig.CHECK_FILE_SIZE)
         {
             int fileLength = decodeRequest.getFileInfoHolder().getFileLength() == -1 ? decodeRequest.getFileInfoHolder().getAccessLink().getHttpLength() : decodeRequest.getFileInfoHolder().getFileLength();
-            if (decodeRequest.getDecodedArray().length != fileLength)
+            if (fileLength != -1 && decodeRequest.getDecodedArray().length != fileLength)
             {
                 System.out.println("File " + (decodeRequest.getLinkPath()) + " have different length than expected!");
             }
@@ -103,7 +103,7 @@ public class DownloadFiles implements IRequestor
         StoreManager.getInstance().addRequestToQueue(new StoreRequest(this, decodeRequest.getDownloadRequest(), decodeRequest.getDecodedArray()));
         if (!MainConfig.THREAD_USAGE)
         {
-            StoreManager.getInstance().runQueueEntry();
+            StoreManager.getInstance().runQueueEntry(-1);
         }
     }
 

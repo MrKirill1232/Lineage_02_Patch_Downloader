@@ -14,10 +14,10 @@ public abstract class AbstractQueueManager
 {
     protected final Queue<IRequest>     _requestQueue;
 
-    private ScheduledThreadPoolExecutor _executor;
-    private ScheduledFuture[]           _threads;
-    private AtomicBoolean[]             _threadsStatus;
-    private AtomicBoolean               _globalBlocker;
+    protected ScheduledThreadPoolExecutor _executor;
+    protected ScheduledFuture[]           _threads;
+    protected AtomicBoolean[]             _threadsStatus;
+    protected AtomicBoolean               _globalBlocker;
 
     public AbstractQueueManager()
     {
@@ -58,11 +58,11 @@ public abstract class AbstractQueueManager
         {
             return;
         }
-        runQueueEntry();
+        runQueueEntry(threadId);
         _threadsStatus[threadId].set(false);
     }
 
-    public abstract void runQueueEntry();
+    public abstract void runQueueEntry(int threadId);
 
     public int getCountOfTaskInQueue()
     {
