@@ -2,35 +2,22 @@ package org.index.patchdownloader.model.requests;
 
 import org.index.patchdownloader.interfaces.IRequest;
 import org.index.patchdownloader.interfaces.IRequestor;
-import org.index.patchdownloader.model.holders.LinkHolder;
+import org.index.patchdownloader.model.holders.FileInfoHolder;
 
 public class DownloadRequest implements IRequest
 {
-    private IRequestor _requestor;
+    private IRequestor      _requestor;
 
-    private LinkHolder _linkHolder;
-    private int         _httpStatus;
-    private byte[][]    _downloadedByteArray;
+    private FileInfoHolder  _fileInfo;
+    private byte[][]        _downloadedByteArray;
 
-    public DownloadRequest(IRequestor requestor, LinkHolder linkHolder)
+    private int             _downloadingAttempts;
+
+    public DownloadRequest(IRequestor requestor, FileInfoHolder fileInfo)
     {
         _requestor  = requestor;
-        _linkHolder = linkHolder;
-        _httpStatus = -1;
-
-        if (linkHolder == null)
-        {
-            _downloadedByteArray = new byte[1][];
-        }
-        else
-        {
-            _downloadedByteArray = new byte[linkHolder.getTotalFileParts()][];
-        }
-    }
-
-    public void setHttpStatus(int status)
-    {
-        _httpStatus = status;
+        _fileInfo   = fileInfo;
+        _downloadedByteArray = new byte[Math.max(fileInfo.getAllSeparatedParts().length, 1)][];
     }
 
     public void addDownloadedPart(int filePart, byte[] downloadedByteArray)
@@ -47,9 +34,14 @@ public class DownloadRequest implements IRequest
         }
     }
 
-    public int getHttpStatus()
+    public int getDownloadingAttempts()
     {
-        return _httpStatus;
+        return _downloadingAttempts;
+    }
+
+    public void setDownloadingAttempts(int downloadingAttempts)
+    {
+        _downloadingAttempts = downloadingAttempts;
     }
 
     public byte[][] getDownloadedByteArray()
@@ -59,12 +51,19 @@ public class DownloadRequest implements IRequest
 
     public boolean isComplete()
     {
-        return _httpStatus == 200 && !(_downloadedByteArray == null || _downloadedByteArray.length == 0);
+        for (FileInfoHolder fileInfoHolder : getFileInfoHolder().getAllSeparatedParts())
+        {
+            if (fileInfoHolder.getAccessLink().getHttpStatus() != 200)
+            {
+                return false;
+            }
+        }
+        return (getFileInfoHolder().getAllSeparatedParts().length != 0 || getFileInfoHolder().getAccessLink().getHttpStatus() == 200) && !(_downloadedByteArray == null || _downloadedByteArray.length == 0);
     }
 
     @Override
-    public LinkHolder getLinkHolder()
+    public FileInfoHolder getFileInfoHolder()
     {
-        return _linkHolder;
+        return _fileInfo;
     }
 }

@@ -1,7 +1,7 @@
 package org.index.patchdownloader.impl.conditions;
 
 import org.index.patchdownloader.interfaces.ICondition;
-import org.index.patchdownloader.model.holders.LinkHolder;
+import org.index.patchdownloader.model.holders.FileInfoHolder;
 import org.index.patchdownloader.util.Utils;
 
 public class ConditionName implements ICondition
@@ -63,9 +63,9 @@ public class ConditionName implements ICondition
     }
 
     @Override
-    public boolean check(LinkHolder linkHolder)
+    public boolean check(FileInfoHolder fileInfoHolder)
     {
-        if (linkHolder == null)
+        if (fileInfoHolder == null)
         {
             return false;
         }
@@ -76,7 +76,7 @@ public class ConditionName implements ICondition
         boolean isCheckPath = (_checkPath == null);
         boolean isCheckName = (_checkName == null);
         boolean isCheckExtn = (_checkExtn == null);
-        String[] nameAndExtn = linkHolder.getFileName().split("\\.");
+        String[] nameAndExtn = fileInfoHolder.getFileName().split("\\.");
         if (_checkPath != null)
         {
             if (Utils.checkByChar(_checkPath, 1, 0, '*'))
@@ -85,7 +85,7 @@ public class ConditionName implements ICondition
             }
             else if (Utils.checkByChar(_checkPath, -1, (_checkPath.length() - 1), '*'))
             {
-                String pathOfFile = linkHolder.getFilePath();
+                String pathOfFile = fileInfoHolder.getFilePath();
                 String checkPath = _checkPath.substring(0, _checkPath.length() - 1);
                 if (checkPath.charAt(checkPath.length() - 1) == '/')
                 {
@@ -100,7 +100,7 @@ public class ConditionName implements ICondition
             }
             else
             {
-                String pathOfFile = linkHolder.getFilePath();
+                String pathOfFile = fileInfoHolder.getFilePath();
                 int lastIndex = pathOfFile.lastIndexOf('/');
                 if (lastIndex != -1 && lastIndex == (pathOfFile.length() - 1))
                 {

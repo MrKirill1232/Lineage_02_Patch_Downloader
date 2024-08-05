@@ -9,8 +9,6 @@ public class NcJapaneseLinkGenerator extends NcTaiwanLinkGenerator
         super(CDNLink.NC_SOFT_JAPANESE, patchVersion);
     }
 
-
-
     @Override
     protected String getFileListFileName()
     {

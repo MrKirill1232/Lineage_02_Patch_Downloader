@@ -3,7 +3,7 @@ package org.index.patchdownloader.interfaces;
 import org.index.patchdownloader.config.configs.MainConfig;
 import org.index.patchdownloader.impl.conditions.ConditionName;
 import org.index.patchdownloader.impl.conditions.ConditionRestoreDownload;
-import org.index.patchdownloader.model.holders.LinkHolder;
+import org.index.patchdownloader.model.holders.FileInfoHolder;
 import org.index.patchdownloader.model.linkgenerator.GeneralLinkGenerator;
 
 import java.util.ArrayList;
@@ -11,7 +11,7 @@ import java.util.List;
 
 public interface ICondition
 {
-    default boolean check(LinkHolder linkHolder)
+    default boolean check(FileInfoHolder fileInfoHolder)
     {
         return true;
     }
@@ -24,18 +24,18 @@ public interface ICondition
         return false;
     }
 
-    public static boolean checkCondition(List<ICondition> conditionList, LinkHolder linkHolder)
+    public static boolean checkCondition(List<ICondition> conditionList, FileInfoHolder fileInfoHolder)
     {
         for (ICondition condition : conditionList)
         {
             if (condition.optional())
             {
-                if (condition.check(linkHolder))
+                if (condition.check(fileInfoHolder))
                 {
                     return true;
                 }
             }
-            else if (!condition.check(linkHolder))
+            else if (!condition.check(fileInfoHolder))
             {
                 return false;
             }

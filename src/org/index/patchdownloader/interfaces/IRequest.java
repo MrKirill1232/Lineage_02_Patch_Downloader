@@ -1,6 +1,6 @@
 package org.index.patchdownloader.interfaces;
 
-import org.index.patchdownloader.model.holders.LinkHolder;
+import org.index.patchdownloader.model.holders.FileInfoHolder;
 
 public interface IRequest
 {
@@ -8,13 +8,13 @@ public interface IRequest
 
     default String getLinkPath()
     {
-        LinkHolder linkHolder = getLinkHolder();
-        if (linkHolder == null)
+        FileInfoHolder fileInfoHolder = getFileInfoHolder();
+        if (fileInfoHolder == null)
         {
             return "";
         }
-        return linkHolder.getLinkPath();
+        return fileInfoHolder.getLinkPath();
     }
 
-    LinkHolder getLinkHolder();
+    FileInfoHolder getFileInfoHolder();
 }

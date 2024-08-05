@@ -1,11 +1,11 @@
 package org.index.patchdownloader.model.linkgenerator;
 
 import org.index.patchdownloader.enums.CDNLink;
-import org.index.patchdownloader.enums.FileTypeByLink;
 import org.index.patchdownloader.instancemanager.DecodeManager;
+import org.index.patchdownloader.model.holders.FileInfoHolder;
+import org.index.patchdownloader.model.holders.LinkInfoHolder;
 import org.index.patchdownloader.model.requests.DownloadRequest;
 import org.index.patchdownloader.instancemanager.DownloadManager;
-import org.index.patchdownloader.model.holders.LinkHolder;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -26,13 +26,13 @@ public class NcKoreanLinkGenerator extends GeneralLinkGenerator
     {
         String url = String.format(_cdnLinkType.getCdnFileListLink(), _patchVersion);
 
-        LinkHolder linkHolder = new LinkHolder("files_info.json.zip", "", FileTypeByLink.NORMAL_FILE, 1);
-        linkHolder.setNamesOfFiles(0, linkHolder.getFileName());
-        linkHolder.setFileLength(0, -1);
-        linkHolder.setAccessLink(0, url);
+        FileInfoHolder fileListInfo = new FileInfoHolder("files_info.json.zip", "", false, 0);
+        fileListInfo.setFileLength(-1);
+        fileListInfo.setAccessLink(new LinkInfoHolder(fileListInfo));
+        fileListInfo.getAccessLink().setAccessLink(url);
 
-        DownloadRequest request = DownloadManager.download(new DownloadRequest(null, linkHolder));
-        parseFileList(request);
+        DownloadRequest fileListRequest = DownloadManager.download(new DownloadRequest(null, fileListInfo));
+        parseFileList(fileListRequest);
     }
 
     private void parseFileList(DownloadRequest request)
@@ -40,7 +40,7 @@ public class NcKoreanLinkGenerator extends GeneralLinkGenerator
         String jsonContent = zipToJson(request);
         if (jsonContent.isEmpty())
         {
-            throw new NoSuchElementException("Version is unavailable! Requested version " + _patchVersion + ". Requested link " + request.getLinkHolder().getAccessLink()[0] + ";");
+            throw new NoSuchElementException("Version is unavailable! Requested version " + _patchVersion + ". Requested link " + request.getFileInfoHolder().getAccessLink() + ";");
         }
         JSONObject jsonTable;
         try
@@ -56,43 +56,26 @@ public class NcKoreanLinkGenerator extends GeneralLinkGenerator
         {
             JSONObject fileInfo = (JSONObject) files.get(index);
             int patchVersion    = Integer.parseInt(String.valueOf(fileInfo.get("version")));
-            int originalFileSize= Integer.parseInt(String.valueOf(fileInfo.get("size")));
-            String hashSum = String.valueOf(fileInfo.get("hash"));
-            String pathInClient = String.valueOf(fileInfo.get("path"));
-            String nameOfFile = getName(pathInClient, patchVersion, false, false);
             JSONObject encodedInfo = (JSONObject) fileInfo.get("encodedInfo");
-            LinkHolder linkHolder = null;
-            String filePath = pathInClient.substring(0, (pathInClient.length() - nameOfFile.length()));
-            if (encodedInfo.get("separates") != null)
-            {
-                JSONArray separatedFileList = (JSONArray) encodedInfo.get("separates");
-                linkHolder = new LinkHolder(nameOfFile, filePath, FileTypeByLink.SEPARATED, separatedFileList.size());
-                for (int separateIndex = 0; separateIndex < separatedFileList.size(); separateIndex++)
-                {
-                    JSONObject separatedFileInfo = (JSONObject) separatedFileList.get(separateIndex);
+            JSONArray separatedFileList = (JSONArray) encodedInfo.get("separates");
+            FileInfoHolder originalFileInfo = parseFileInfoFromJSONObject(fileInfo, patchVersion, false, false, (separatedFileList == null ? 0 : separatedFileList.size()));
+            FileInfoHolder encodedFileInfo = parseFileInfoFromJSONObject(encodedInfo, patchVersion, true, false, 0);
 
-                    String pathAndName = String.valueOf(separatedFileInfo.get("path"));
-                    int size = Integer.parseInt(String.valueOf(separatedFileInfo.get("size")));
-                    String separatedHashSum = String.valueOf(separatedFileInfo.get("hash"));
+            originalFileInfo.setFileHashSum(originalFileInfo.getDownloadDataHashSum());
+            originalFileInfo.setFileLength(originalFileInfo.getDownloadDataLength());
 
-                    linkHolder.setNamesOfFiles(separateIndex, getName(pathAndName, patchVersion, true, true));
-                    linkHolder.setFileLength(separateIndex, size);
-                    linkHolder.setAccessLink(separateIndex, String.format(_cdnLinkType.getGeneralCdnLink(), pathAndName));
-                    linkHolder.setHashsum(separateIndex, separatedHashSum);
-                }
-            }
-            else
+            originalFileInfo.setDownloadDataHashSum(encodedFileInfo.getDownloadDataHashSum());
+            originalFileInfo.setDownloadDataLength(encodedFileInfo.getDownloadDataLength());
+
+            originalFileInfo.setAccessLink(new LinkInfoHolder(originalFileInfo));
+            originalFileInfo.getAccessLink().setAccessLink(encodedFileInfo.getAccessLink().getAccessLink());
+
+            for (int separateIndex = 0; separateIndex < originalFileInfo.getAllSeparatedParts().length; separateIndex++)
             {
-                String pathAndName = String.valueOf(encodedInfo.get("path"));
-                int size = Integer.parseInt(String.valueOf(encodedInfo.get("size")));
-                linkHolder = new LinkHolder(nameOfFile, filePath, FileTypeByLink.NORMAL_FILE, 1);
-                linkHolder.setNamesOfFiles(0, nameOfFile);
-                linkHolder.setFileLength(0, size);
-                linkHolder.setAccessLink(0, String.format(_cdnLinkType.getGeneralCdnLink(), pathAndName));
+                JSONObject separatedFileInfo = (JSONObject) separatedFileList.get(separateIndex);
+                originalFileInfo.setSeparatedPart(separateIndex, parseFileInfoFromJSONObject(separatedFileInfo, patchVersion, false, true, 0));
             }
-            linkHolder.setOriginalFileHashsum(hashSum);
-            linkHolder.setOriginalFileLength(originalFileSize);
-            _fileMapHolder .put(pathInClient.toLowerCase(), linkHolder  );
+            _fileMapHolder.put(originalFileInfo.getLinkPath().toLowerCase(), originalFileInfo);
         }
     }
 
@@ -117,5 +100,26 @@ public class NcKoreanLinkGenerator extends GeneralLinkGenerator
             nameOfFile = nameOfFile.substring(0, nameOfFile.length() - 4);
         }
         return nameOfFile;
+    }
+
+    private FileInfoHolder parseFileInfoFromJSONObject(JSONObject jsonObject, int patchVersion, boolean original, boolean isSeparated, int countOfSeparatedParts)
+    {
+        String pathAndName = String.valueOf(jsonObject.get("path"));
+        String fileLength = String.valueOf(jsonObject.get("size"));
+        String hashSum = String.valueOf(jsonObject.get("hash"));
+
+        String fileName = getName(pathAndName, patchVersion, !isSeparated, !original);
+        String filePath = pathAndName.substring(0, (pathAndName.length() - fileName.length()));
+
+        FileInfoHolder fileInfoHolder = new FileInfoHolder(fileName, filePath, isSeparated, countOfSeparatedParts);
+        if ((original && countOfSeparatedParts == 0) || isSeparated)
+        {
+            fileInfoHolder.setAccessLink(new LinkInfoHolder(fileInfoHolder));
+            fileInfoHolder.getAccessLink().setAccessLink(String.format(_cdnLinkType.getGeneralCdnLink(), pathAndName));
+        }
+        fileInfoHolder.setDownloadDataLength(Integer.parseInt(fileLength));
+        fileInfoHolder.setDownloadDataHashSum(hashSum);
+
+        return fileInfoHolder;
     }
 }

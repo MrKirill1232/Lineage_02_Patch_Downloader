@@ -2,7 +2,7 @@ package org.index.patchdownloader.model.requests;
 
 import org.index.patchdownloader.interfaces.IRequest;
 import org.index.patchdownloader.interfaces.IRequestor;
-import org.index.patchdownloader.model.holders.LinkHolder;
+import org.index.patchdownloader.model.holders.FileInfoHolder;
 
 public class DecodeRequest implements IRequest
 {
@@ -63,8 +63,8 @@ public class DecodeRequest implements IRequest
     }
 
     @Override
-    public LinkHolder getLinkHolder()
+    public FileInfoHolder getFileInfoHolder()
     {
-        return _downloadRequest == null ? null : _downloadRequest.getLinkHolder();
+        return getDownloadRequest() == null ? null : getDownloadRequest().getFileInfoHolder();
     }
 }

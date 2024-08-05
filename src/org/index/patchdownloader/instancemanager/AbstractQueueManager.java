@@ -16,7 +16,7 @@ public abstract class AbstractQueueManager
 
     private ScheduledThreadPoolExecutor _executor;
     private ScheduledFuture[]           _threads;
-    private boolean[]                   _threadsStatus;
+    private AtomicBoolean[]             _threadsStatus;
     private AtomicBoolean               _globalBlocker;
 
     public AbstractQueueManager()
@@ -35,11 +35,11 @@ public abstract class AbstractQueueManager
 
         _executor = ScheduledThreadPoolExecutorWrapper.createSingleScheduledExecutor(corePoolSize, getClass().getSimpleName());
         _threads = new ScheduledFuture[threadCount];
-        _threadsStatus = new boolean[threadCount];
+        _threadsStatus = new AtomicBoolean[threadCount];
 
         for (int threadId = 0; threadId < threadCount; threadId++)
         {
-            _threadsStatus[threadId] = false;
+            _threadsStatus[threadId] = new AtomicBoolean(false);
         }
         for (int threadId = 0; threadId < threadCount; threadId++)
         {
@@ -54,13 +54,12 @@ public abstract class AbstractQueueManager
         {
             return;
         }
-        if (_threadsStatus[threadId])
+        if (_threadsStatus[threadId].compareAndSet(false, true))
         {
             return;
         }
-        _threadsStatus[threadId] = true;
         runQueueEntry();
-        _threadsStatus[threadId] = false;
+        _threadsStatus[threadId].set(false);
     }
 
     public abstract void runQueueEntry();

@@ -63,7 +63,7 @@ public class DecodeManager extends AbstractQueueManager
             encodeBuffer.put(encodeArray[fIndex]);
         }
 
-        if (request.getLinkHolder().getOriginalFileLength() == totalArrayLength)
+        if (request.getFileInfoHolder().getFileLength() == totalArrayLength)
         {
             return encodeBuffer.array();
         }
@@ -88,6 +88,18 @@ public class DecodeManager extends AbstractQueueManager
                 System.out.println("Cannot decode input array by LZMA method. Reason: " + "LZMA dictionary is too big for this implementation. File '" + request.getLinkPath() + "';");
                 return encodeBuffer.array();
             }
+        }
+
+        int allocateBufferSize = getUnCompressSize(encodeArray[0]);
+        if (allocateBufferSize <= 0 || allocateBufferSize == Integer.MAX_VALUE)
+        {
+            if (encodeArray.length > 1)
+            {
+                System.out.println("Cannot decode input array by LZMA method. Reason: " + "Uncompressed length is not correct! Next size found: " + allocateBufferSize + ". File '" + request.getLinkPath() + "';");
+                return encodeBuffer.array();
+            }
+            // System.out.println("Cannot decode input array by LZMA method. Reason: " + "File is not a archive. File '" + request.getLinkPath() + "';");
+            return encodeBuffer.array();
         }
 
         return decode(encodeBuffer.array());

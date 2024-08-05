@@ -46,13 +46,13 @@ public class Controller
         GeneralLinkGenerator generalLinkGenerator = GeneralLinkGenerator.generateLinkToFiles(MainConfig.CDN_SOURCE, MainConfig.PATCH_VERSION_SOURCE);
         if (generalLinkGenerator == null)
         {
-            System.out.println("Patch version is unavailable. Version: " + MainConfig.PATCH_VERSION_SOURCE + "; CDN Source:" + MainConfig.CDN_SOURCE + ";");
+            System.out.println("Patch version is unavailable. Version: " + MainConfig.PATCH_VERSION_SOURCE + "; CDN Source: " + MainConfig.CDN_SOURCE + ";");
             return;
         }
         generalLinkGenerator.load();
         if (generalLinkGenerator.getFileMapHolder().isEmpty())
         {
-            System.out.println("Patch version is unavailable. Version: " + MainConfig.PATCH_VERSION_SOURCE + "; CDN Source:" + MainConfig.CDN_SOURCE + ";");
+            System.out.println("Patch version is unavailable. Version: " + MainConfig.PATCH_VERSION_SOURCE + "; CDN Source: " + MainConfig.CDN_SOURCE + ";");
             return;
         }
 

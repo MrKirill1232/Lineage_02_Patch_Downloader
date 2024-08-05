@@ -2,9 +2,10 @@ package org.index.patchdownloader.model.linkgenerator;
 
 import org.index.patchdownloader.enums.CDNLink;
 import org.index.patchdownloader.enums.FileTypeByLink;
+import org.index.patchdownloader.model.holders.FileInfoHolder;
+import org.index.patchdownloader.model.holders.LinkInfoHolder;
 import org.index.patchdownloader.model.requests.DownloadRequest;
 import org.index.patchdownloader.instancemanager.DownloadManager;
-import org.index.patchdownloader.model.holders.LinkHolder;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -25,25 +26,27 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
     @Override
     public void load()
     {
-        String listUrl = String.format(_cdnLinkType.getCdnFileListLink(), _patchVersion, _patchVersion);
+        String fileListUrl = String.format(_cdnLinkType.getCdnFileListLink(), _patchVersion, _patchVersion);
 
-        LinkHolder listLinkHolder = new LinkHolder(getFileListFileName(), "", FileTypeByLink.NORMAL_FILE, 1);
-        listLinkHolder.setNamesOfFiles(0, listLinkHolder.getFileName());
-        listLinkHolder.setFileLength(0, -1);
-        listLinkHolder.setAccessLink(0, listUrl);
+        FileInfoHolder fileListInfo = new FileInfoHolder(getFileListFileName(), "", false, 0);
+        fileListInfo.setFileLength(-1);
+        fileListInfo.setAccessLink(new LinkInfoHolder(fileListInfo));
+        fileListInfo.getAccessLink().setAccessLink(fileListUrl);
 
-        DownloadRequest listrequest = DownloadManager.download(new DownloadRequest(null, listLinkHolder));
-        parseFileList(listrequest);
+        DownloadRequest fileListRequest = DownloadManager.download(new DownloadRequest(null, fileListInfo));
+        parseFileList(fileListRequest);
 
-        String hashUrl = String.format(_cdnLinkType.getGeneralCdnLink(), _patchVersion, getFileListFileHash());
+        //------------------------------------------------------------------------------------------------------//
 
-        LinkHolder hashLinkHolder = new LinkHolder(getFileListFileHash(), "", FileTypeByLink.NORMAL_FILE, 1);
-        hashLinkHolder.setNamesOfFiles(0, hashLinkHolder.getFileName());
-        hashLinkHolder.setFileLength(0, -1);
-        hashLinkHolder.setAccessLink(0, hashUrl);
+        String fileMapUrl = String.format(_cdnLinkType.getGeneralCdnLink(), _patchVersion, getFileListFileHash());
 
-        DownloadRequest hashrequest = DownloadManager.download(new DownloadRequest(null, hashLinkHolder));
-        parseHashList(hashrequest);
+        FileInfoHolder fileMapInfo = new FileInfoHolder(getFileListFileHash(), "", false, 0);
+        fileMapInfo.setFileLength(-1);
+        fileMapInfo.setAccessLink(new LinkInfoHolder(fileMapInfo));
+        fileMapInfo.getAccessLink().setAccessLink(fileMapUrl);
+
+        DownloadRequest fileMapRequest = DownloadManager.download(new DownloadRequest(null, fileMapInfo));
+        parseHashList(fileMapRequest);
     }
 
     protected String getFileListFileName()
@@ -85,46 +88,65 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
                 {
                     continue;
                 }
-                int separateCounter = 0;
-                while (true)
-                {
-                    String checkPart = String.format(nameOfPart, ((separateCounter) + 1));
-                    if (!stringMapOfValues.containsKey(checkPart))
-                    {
-                        break;
-                    }
-                    separateCounter += 1;
-                }
-                countOfSeparatedFiles = separateCounter;
+                countOfSeparatedFiles = getCountOfSeparatedFiles(stringMapOfValues, nameOfPart);
             }
             else
             {
-                countOfSeparatedFiles = 1;
+                countOfSeparatedFiles = 0;
             }
 
-            LinkHolder linkHolder = new LinkHolder(getNameOfFile(pathAndName, (isSeparated && countOfSeparatedFiles > 1), false), getPathOfFile(line), FileTypeByLink.values()[typeOfFile], countOfSeparatedFiles);
-
-            for (int sIndex = 0; sIndex < countOfSeparatedFiles; sIndex++)
+            FileInfoHolder fileInfoHolder = parseFileInfoFromLine(line, true, false, countOfSeparatedFiles);
+            if (countOfSeparatedFiles > 1)
             {
-                if (line.contains("HighElf"))
+                // separate index :D
+                for (int sIndex = 0; sIndex < countOfSeparatedFiles; sIndex++)
                 {
-                    System.out.println();
+                    String lookingInfo = stringMapOfValues.get(String.format(nameOfPart, (sIndex + 1)));
+                    fileInfoHolder.setSeparatedPart(sIndex, parseFileInfoFromLine(lookingInfo, false, true, 0));
                 }
-                String lookingInfo = isSeparated && countOfSeparatedFiles > 1 ? stringMapOfValues.get(String.format(nameOfPart, (sIndex + 1))) : line;
-                String[] splitLineInfo = lookingInfo.split(":", 5);
-                if (splitLineInfo.length != 4)
-                {
-                    throw new IllegalArgumentException("[path]:[size]:[sha-1 hash]:[file_type]. Structure is not full!");
-                }
-                String  pathUndName = splitLineInfo[0];
-                String  fileLength  = splitLineInfo[1];
-                String  hashCode    = splitLineInfo[2];
-                linkHolder.setNamesOfFiles(sIndex, getNameOfFile(pathUndName, false, false));
-                linkHolder.setAccessLink(sIndex, formatGetUrl(pathUndName));
-                linkHolder.setFileLength(sIndex, Integer.parseInt(fileLength));
-                _fileMapHolder.put((linkHolder.getLinkPath()).toLowerCase(), linkHolder);
             }
+            _fileMapHolder.put((fileInfoHolder.getLinkPath()).toLowerCase(), fileInfoHolder);
         }
+    }
+
+    private static int getCountOfSeparatedFiles(Map<String, String> stringMapOfValues, String nameOfPart)
+    {
+        int separateCounter = 0;
+        while (true)
+        {
+            String checkPart = String.format(nameOfPart, ((separateCounter) + 1));
+            if (!stringMapOfValues.containsKey(checkPart))
+            {
+                return separateCounter;
+            }
+            separateCounter += 1;
+        }
+    }
+
+    private FileInfoHolder parseFileInfoFromLine(String line, boolean original, boolean isSeparated, int countOfSeparatedParts)
+    {
+        String[] splitLineInfo = line.split(":", 5);
+        if (splitLineInfo.length != 4)
+        {
+            throw new IllegalArgumentException("[path]:[size]:[sha-1 hash]:[file_type]. Structure is not full!");
+        }
+        String  pathUndName = splitLineInfo[0];
+        String  fileLength  = splitLineInfo[1];
+        String  hashSum     = splitLineInfo[2];
+
+        String filePath = getPathOfFile(pathUndName);
+        String fileName = getNameOfFile(pathUndName, !isSeparated, !original);
+
+        FileInfoHolder fileInfoHolder = new FileInfoHolder(fileName, filePath, isSeparated, countOfSeparatedParts);
+        if ((original && countOfSeparatedParts == 0) || isSeparated)
+        {
+            fileInfoHolder.setAccessLink(new LinkInfoHolder(fileInfoHolder));
+            fileInfoHolder.getAccessLink().setAccessLink(formatGetUrl(pathUndName));
+        }
+        fileInfoHolder.setDownloadDataLength(Integer.parseInt(fileLength));
+        fileInfoHolder.setDownloadDataHashSum(hashSum);
+
+        return fileInfoHolder;
     }
 
     protected void parseHashList(DownloadRequest request)
@@ -143,17 +165,17 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
 
             String pathAndName = splitLineInfo[0].toLowerCase();
 
-            LinkHolder linkHolder = _fileMapHolder.getOrDefault(pathAndName, null);
-            if (linkHolder == null)
+            FileInfoHolder fileInfo = _fileMapHolder.getOrDefault(pathAndName, null);
+            if (fileInfo == null)
             {
                 continue;
             }
 
             String  fileLength  = splitLineInfo[1];
-            String  hashCode    = splitLineInfo[2];
+            String  hashSum     = splitLineInfo[2];
 
-            linkHolder.setOriginalFileLength(Integer.parseInt(fileLength));
-            linkHolder.setOriginalFileHashsum(hashCode);
+            fileInfo.setFileLength(Integer.parseInt(fileLength));
+            fileInfo.setFileHashSum(hashSum);
         }
     }
 

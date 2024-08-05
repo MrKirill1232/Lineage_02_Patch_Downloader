@@ -79,6 +79,9 @@ public class MainConfig implements IConfig
     @ConfigParameter(parameterName = "acmi_like_logging")
     public static boolean ACMI_LIKE_LOGGING = false;
 
+    @ConfigParameter(parameterName = "max_download_attempts", ignoredParameter = true)
+    public static int MAX_DOWNLOAD_ATTEMPTS = 2;
+
     @Override
     public void onLoad()
     {

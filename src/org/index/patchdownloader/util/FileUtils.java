@@ -1,6 +1,6 @@
 package org.index.patchdownloader.util;
 
-import org.index.patchdownloader.model.holders.LinkHolder;
+import org.index.patchdownloader.model.holders.FileInfoHolder;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -32,17 +32,17 @@ public class FileUtils
         return fileList.toArray(new File[0]);
     }
 
-    public static boolean createSubFolders(File originalFolder, LinkHolder linkHolder)
+    public static boolean createSubFolders(File originalFolder, FileInfoHolder fileInfoHolder)
     {
         if (!originalFolder.exists() && !originalFolder.mkdirs())
         {
             return false;
         }
-        if (new File(originalFolder, (linkHolder.getLinkPath())).exists())
+        if (new File(originalFolder, (fileInfoHolder.getLinkPath())).exists())
         {
             return true;
         }
-        String[] splitPath = linkHolder.getFilePath().split("/");
+        String[] splitPath = fileInfoHolder.getFilePath().split("/");
         File checkCreation = originalFolder;
         for (String path : splitPath)
         {

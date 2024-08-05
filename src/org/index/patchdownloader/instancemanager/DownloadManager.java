@@ -1,6 +1,9 @@
 package org.index.patchdownloader.instancemanager;
 
+import org.index.patchdownloader.config.configs.MainConfig;
 import org.index.patchdownloader.interfaces.IRequest;
+import org.index.patchdownloader.model.holders.FileInfoHolder;
+import org.index.patchdownloader.model.holders.LinkInfoHolder;
 import org.index.patchdownloader.model.requests.DownloadRequest;
 
 import java.io.IOException;
@@ -38,9 +41,10 @@ public class DownloadManager extends AbstractQueueManager
         }
         DownloadRequest downloadRequest = (DownloadRequest) request;
         DownloadRequest downloaded = download(downloadRequest);
-        if (downloaded == null)
+        if (downloaded == null && (MainConfig.MAX_DOWNLOAD_ATTEMPTS == -1 || downloadRequest.getDownloadingAttempts() <= MainConfig.MAX_DOWNLOAD_ATTEMPTS))
         {
-            downloadRequest.setHttpStatus(-1);
+            downloadRequest.getFileInfoHolder().getAccessLink().setHttpStatus(-1);
+            downloadRequest.setDownloadingAttempts(downloadRequest.getDownloadingAttempts() + 1);
             System.out.println("Trying to re-start downloading for file: '" + downloadRequest.getLinkPath() + "';");
             addRequestToQueue(downloadRequest);
             return;
@@ -52,47 +56,24 @@ public class DownloadManager extends AbstractQueueManager
     {
         try
         {
-            for (int index = 0; index < request.getLinkHolder().getTotalFileParts(); index++)
+            if (request.getFileInfoHolder().getAllSeparatedParts().length == 0)
             {
-                String accessLink = request.getLinkHolder().getAccessLink()[index];
-                int byteLength = request.getLinkHolder().getFileLength()[index];
-
-                URI uriLink = URI.create(accessLink);
-                HttpURLConnection urlConnection = (HttpURLConnection) uriLink.toURL().openConnection();
-                urlConnection.setRequestMethod("GET");
-                request.setHttpStatus(urlConnection.getResponseCode());
-
-                // if (request.getLinkHolder().getFileName().equalsIgnoreCase("files_info.json.zip"))
+                FileInfoHolder infoHolder = request.getFileInfoHolder();
+                String accessLink = infoHolder.getAccessLink().getAccessLink();
+                int byteLength = infoHolder.getDownloadDataLength();
+                byte[] downloaded = downloadImpl(infoHolder.getAccessLink(), accessLink, byteLength);
+                request.addDownloadedPart(0, downloaded);
+            }
+            else
+            {
+                for (int index = 0; index < request.getFileInfoHolder().getAllSeparatedParts().length; index++)
                 {
-                    if (request.getHttpStatus() != 200)
-                    {
-                        throw new NoSuchElementException("Patch version is not available. Requested link: " + accessLink);
-                    }
-
-                    if (byteLength == -1)
-                    {
-                        byteLength = urlConnection.getContentLength();
-                    }
-
-                    InputStream is = urlConnection.getInputStream();
-                    ByteBuffer buffer = ByteBuffer.allocate(byteLength == -1 ? 20_971_520 : byteLength);
-
-                    while (true)
-                    {
-                        byte[] bytes = new byte[1024];
-                        int status = is.read(bytes);
-                        if (status == -1)
-                        {
-                            break;
-                        }
-                        buffer.put(bytes, 0, status);
-                    }
-
-                    request.addDownloadedPart(index, Arrays.copyOfRange(buffer.array(), 0, buffer.position()));
+                    FileInfoHolder infoHolder = request.getFileInfoHolder().getAllSeparatedParts()[index];
+                    String accessLink = infoHolder.getAccessLink().getAccessLink();
+                    int byteLength = infoHolder.getDownloadDataLength();
+                    byte[] downloaded = downloadImpl(infoHolder.getAccessLink(), accessLink, byteLength);
+                    request.addDownloadedPart(index, downloaded);
                 }
-
-
-                urlConnection.disconnect();
             }
             return request;
         }
@@ -103,4 +84,53 @@ public class DownloadManager extends AbstractQueueManager
         return null;
     }
 
+    private static byte[] downloadImpl(LinkInfoHolder linkInfo, String accessLink, int byteLength) throws IOException
+    {
+        URI uriLink = URI.create(accessLink);
+        HttpURLConnection urlConnection = (HttpURLConnection) uriLink.toURL().openConnection();
+        urlConnection.setRequestMethod("GET");
+        linkInfo.setHttpStatus(urlConnection.getResponseCode());
+        if (linkInfo.getHttpStatus() != 200)
+        {
+            throw new NoSuchElementException("Patch version is not available. Requested link: " + accessLink);
+        }
+
+        linkInfo.setHttpLength(urlConnection.getContentLength());
+
+        int finalLength;
+        if (byteLength == -1)
+        {
+            if (linkInfo.getHttpLength() == -1)
+            {
+                // finalLength = 20_971_520;
+                finalLength = 20_975_368;
+            }
+            else
+            {
+                finalLength = linkInfo.getHttpLength();
+            }
+        }
+        else
+        {
+            finalLength = byteLength;
+        }
+
+        InputStream is = urlConnection.getInputStream();
+        ByteBuffer buffer = ByteBuffer.allocate(finalLength + 1);
+
+        while (true)
+        {
+            byte[] bytes = new byte[1024];
+            int status = is.read(bytes);
+            if (status == -1)
+            {
+                break;
+            }
+            buffer.put(bytes, 0, status);
+        }
+
+        urlConnection.disconnect();
+
+        return Arrays.copyOfRange(buffer.array(), 0, buffer.position());
+    }
 }

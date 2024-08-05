@@ -3,7 +3,7 @@ package org.index.patchdownloader.impl.conditions;
 import org.index.patchdownloader.config.configs.MainConfig;
 import org.index.patchdownloader.instancemanager.CheckSumManager;
 import org.index.patchdownloader.interfaces.ICondition;
-import org.index.patchdownloader.model.holders.LinkHolder;
+import org.index.patchdownloader.model.holders.FileInfoHolder;
 import org.index.patchdownloader.model.linkgenerator.GeneralLinkGenerator;
 import org.index.patchdownloader.util.FileUtils;
 
@@ -37,8 +37,8 @@ public class ConditionRestoreDownload implements ICondition
         {
             String pathAndName  = getPathAndName(file).toLowerCase().replaceAll("\\\\", "/");
 
-            LinkHolder linkHolder = _linkGenerator.getFileMapHolder().getOrDefault(pathAndName, null);
-            if (linkHolder == null)
+            FileInfoHolder fileInfoHolder = _linkGenerator.getFileMapHolder().getOrDefault(pathAndName, null);
+            if (fileInfoHolder == null)
             {
                 continue;
             }
@@ -48,13 +48,13 @@ public class ConditionRestoreDownload implements ICondition
 
             if (MainConfig.CHECK_BY_SIZE)
             {
-                checkBySize = linkHolder.getOriginalFileLength() == ((int) file.length());
+                checkBySize = fileInfoHolder.getFileLength() == ((int) file.length());
             }
             if (MainConfig.CHECK_BY_HASH_SUM)
             {
                 try
                 {
-                    checkByHash = CheckSumManager.check(Files.readAllBytes(file.toPath()), linkHolder.getOriginalFileHashsum());
+                    checkByHash = CheckSumManager.check(Files.readAllBytes(file.toPath()), fileInfoHolder.getFileHashSum());
                 }
                 catch (IOException e)
                 {
@@ -77,13 +77,13 @@ public class ConditionRestoreDownload implements ICondition
     }
 
     @Override
-    public boolean check(LinkHolder linkHolder)
+    public boolean check(FileInfoHolder fileInfoHolder)
     {
-        String filePath = linkHolder.getFilePath();
+        String filePath = fileInfoHolder.getFilePath();
         if (filePath.endsWith("/"))
         {
             filePath = filePath.substring(0, filePath.length() -1);
         }
-        return !_excludeFileList.contains((filePath + "/" + linkHolder.getFileName()).toLowerCase());
+        return !_excludeFileList.contains((filePath + "/" + fileInfoHolder.getFileName()).toLowerCase());
     }
 }

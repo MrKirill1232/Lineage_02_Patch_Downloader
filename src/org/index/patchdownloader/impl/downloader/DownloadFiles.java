@@ -8,28 +8,25 @@ import org.index.patchdownloader.instancemanager.StoreManager;
 import org.index.patchdownloader.interfaces.ICondition;
 import org.index.patchdownloader.interfaces.IRequest;
 import org.index.patchdownloader.interfaces.IRequestor;
-import org.index.patchdownloader.model.holders.LinkHolder;
+import org.index.patchdownloader.model.holders.FileInfoHolder;
 import org.index.patchdownloader.model.linkgenerator.GeneralLinkGenerator;
 import org.index.patchdownloader.model.requests.DecodeRequest;
 import org.index.patchdownloader.model.requests.DownloadRequest;
 import org.index.patchdownloader.model.requests.StoreRequest;
 import org.index.patchdownloader.util.FileUtils;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class DownloadFiles implements IRequestor
 {
-    private AtomicInteger _simpleCounter = new AtomicInteger();
+    private final AtomicInteger _simpleCounter = new AtomicInteger();
 
     private final GeneralLinkGenerator  _linkGenerator;
-    private final List<ICondition>      _conditionList;
 
     public DownloadFiles(GeneralLinkGenerator linkGenerator)
     {
-        _linkGenerator      = linkGenerator     ;
-        _conditionList      = new ArrayList<>() ;
+        _linkGenerator = linkGenerator;
     }
 
     public void load()
@@ -46,21 +43,21 @@ public class DownloadFiles implements IRequestor
         }
 
         List<ICondition> conditionList = ICondition.loadConditions(_linkGenerator);
-        for (LinkHolder linkHolder : _linkGenerator.getFileMapHolder().values())
+        for (FileInfoHolder fileInfoHolder : _linkGenerator.getFileMapHolder().values())
         {
-            if (!ICondition.checkCondition(conditionList, linkHolder))
+            if (!ICondition.checkCondition(conditionList, fileInfoHolder))
             {
                 _simpleCounter.addAndGet(1);
                 continue;
             }
-            if (!FileUtils.createSubFolders(MainConfig.DOWNLOAD_PATH, linkHolder))
+            if (!FileUtils.createSubFolders(MainConfig.DOWNLOAD_PATH, fileInfoHolder))
             {
                 _simpleCounter.addAndGet(1);
-                System.out.println("Cannot create a " + (linkHolder.getLinkPath()) + ". Ignoring.");
+                System.out.println("Cannot create a " + (fileInfoHolder.getLinkPath()) + ". Ignoring.");
                 continue;
             }
 
-            DownloadManager.getInstance().addRequestToQueue(new DownloadRequest(this, linkHolder));
+            DownloadManager.getInstance().addRequestToQueue(new DownloadRequest(this, fileInfoHolder));
             if (!MainConfig.THREAD_USAGE)
             {
                 DownloadManager.getInstance().runQueueEntry();
@@ -83,17 +80,21 @@ public class DownloadFiles implements IRequestor
     {
         DecodeRequest decodeRequest = (DecodeRequest) request;
 
-        if (MainConfig.CHECK_FILE_SIZE &&  decodeRequest.getLinkHolder().getOriginalFileLength() != 0 && (decodeRequest.getDecodedArray().length != decodeRequest.getLinkHolder().getOriginalFileLength()))
+        if (MainConfig.CHECK_FILE_SIZE)
         {
-            System.out.println("File " + (decodeRequest.getLinkPath()) + " have different length than expected!");
+            int fileLength = decodeRequest.getFileInfoHolder().getFileLength() == -1 ? decodeRequest.getFileInfoHolder().getAccessLink().getHttpLength() : decodeRequest.getFileInfoHolder().getFileLength();
+            if (decodeRequest.getDecodedArray().length != fileLength)
+            {
+                System.out.println("File " + (decodeRequest.getLinkPath()) + " have different length than expected!");
+            }
         }
         if (MainConfig.CHECK_HASH_SUM)
         {
-            if (decodeRequest.getLinkHolder().getOriginalFileHashsum() == null)
+            if (decodeRequest.getFileInfoHolder().getFileHashSum() == null)
             {
                 System.out.println("File " + (decodeRequest.getLinkPath()) + " do not have hashsum in file map.");
             }
-            if (!CheckSumManager.check(decodeRequest.getDecodedArray(), decodeRequest.getLinkHolder().getOriginalFileHashsum()))
+            if (!CheckSumManager.check(decodeRequest.getDecodedArray(), decodeRequest.getFileInfoHolder().getFileHashSum()))
             {
                 System.out.println("File " + (decodeRequest.getLinkPath()) + " not match hash sum with original file.");
             }
@@ -111,7 +112,7 @@ public class DownloadFiles implements IRequestor
     {
         _simpleCounter.addAndGet(1);
         int percentCounter = (int) ((double) _simpleCounter.get() / (double) _linkGenerator.getFileMapHolder().size() * 100d);
-        logStoring(MainConfig.ACMI_LIKE_LOGGING, request.getLinkHolder(), percentCounter);
+        logStoring(MainConfig.ACMI_LIKE_LOGGING, request.getFileInfoHolder(), percentCounter);
         if (MainConfig.THREAD_USAGE)
         {
             if (DownloadManager.getInstance().getCountOfTaskInQueue() == 0 && DecodeManager.getInstance().getCountOfTaskInQueue() == 0 && StoreManager.getInstance().getCountOfTaskInQueue() == 0)
@@ -122,9 +123,9 @@ public class DownloadFiles implements IRequestor
         }
     }
 
-    private static void logStoring(boolean acmiLike, LinkHolder linkHolder, int percentCounter)
+    private static void logStoring(boolean acmiLike, FileInfoHolder fileInfoHolder, int percentCounter)
     {
-        if (linkHolder == null)
+        if (fileInfoHolder == null)
         {
             System.out.println("??: " + "FAIL");
         }
@@ -132,11 +133,11 @@ public class DownloadFiles implements IRequestor
         {
             if (acmiLike)
             {
-                System.out.println(linkHolder.getLinkPath() + ": OK");
+                System.out.println(fileInfoHolder.getLinkPath() + ": OK");
             }
             else
             {
-                System.out.println("Progress " + percentCounter + "% / 100%" + " | " + "Storing " + (linkHolder.getLinkPath()) + "...");
+                System.out.println("Progress " + percentCounter + "% / 100%" + " | " + "Storing '" + (fileInfoHolder.getLinkPath()) + "'...");
             }
         }
     }

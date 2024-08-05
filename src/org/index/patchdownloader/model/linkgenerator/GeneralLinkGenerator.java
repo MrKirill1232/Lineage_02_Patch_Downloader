@@ -1,7 +1,7 @@
 package org.index.patchdownloader.model.linkgenerator;
 
 import org.index.patchdownloader.enums.CDNLink;
-import org.index.patchdownloader.model.holders.LinkHolder;
+import org.index.patchdownloader.model.holders.FileInfoHolder;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -38,7 +38,7 @@ public abstract class GeneralLinkGenerator
     protected final CDNLink _cdnLinkType;
     protected final int _patchVersion;
 
-    protected Map<String, LinkHolder> _fileMapHolder;
+    protected Map<String, FileInfoHolder> _fileMapHolder;
 
     protected GeneralLinkGenerator(CDNLink cdnLink, int patchVersion)
     {
@@ -59,7 +59,7 @@ public abstract class GeneralLinkGenerator
         return _patchVersion;
     }
 
-    public Map<String, LinkHolder> getFileMapHolder()
+    public Map<String, FileInfoHolder> getFileMapHolder()
     {
         return _fileMapHolder;
     }
