@@ -1,5 +1,7 @@
 package org.index.patchdownloader.model.holders;
 
+import org.index.patchdownloader.enums.ArchiveType;
+
 public class FileInfoHolder
 {
     private final static FileInfoHolder[] EMPTY_ARRAY = new FileInfoHolder[0];
@@ -9,6 +11,8 @@ public class FileInfoHolder
     private final boolean   _partOfFile ;
     private LinkInfoHolder  _accessLink ;
 
+    private final ArchiveType _compressType;
+
     private String          _fileHashSum;
     private int             _fileLength ;
     private String          _downloadDataHashSum;
@@ -16,10 +20,11 @@ public class FileInfoHolder
 
     private final FileInfoHolder[] _separatedParts;
 
-    public FileInfoHolder(String fileName, String filePath, boolean separated, int countOfSeparatedParts)
+    public FileInfoHolder(String fileName, String filePath, ArchiveType compressType, boolean separated, int countOfSeparatedParts)
     {
         _fileName   = fileName  ;
         _filePath   = filePath  ;
+        _compressType = compressType;
         _partOfFile = separated ;
         _fileLength = -1;
         _downloadDataLength = -1;
@@ -56,6 +61,11 @@ public class FileInfoHolder
     public void setAccessLink(LinkInfoHolder accessLink)
     {
         _accessLink = accessLink;
+    }
+
+    public ArchiveType getCompressType()
+    {
+        return _compressType;
     }
 
     public String getFileHashSum()

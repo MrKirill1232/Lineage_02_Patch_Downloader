@@ -28,6 +28,10 @@ public abstract class GeneralLinkGenerator
             {
                 return new NcKoreanLinkGenerator(patchVersion);
             }
+            case UP_NOVA_LAUNCHER:
+            {
+                return new NovaLauncherGenerator();
+            }
             default:
             {
                 return null;

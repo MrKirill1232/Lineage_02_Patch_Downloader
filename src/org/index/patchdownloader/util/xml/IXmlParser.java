@@ -42,7 +42,7 @@ public interface IXmlParser
         SAXReader reader = initReader();
         try
         {
-            parseDocument(xmlInfo, reader.read(new InputStreamReader(new ByteArrayInputStream(xmlContent.getBytes()))));
+            parseDocument(xmlInfo, reader.read(new InputStreamReader(new ByteArrayInputStream(xmlContent.replace("\uFEFF", "").getBytes()))));
         }
         catch (DocumentException e)
         {

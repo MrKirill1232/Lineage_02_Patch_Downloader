@@ -2,7 +2,7 @@ package org.index.patchdownloader.impl.downloader;
 
 import org.index.patchdownloader.config.configs.MainConfig;
 import org.index.patchdownloader.instancemanager.CheckSumManager;
-import org.index.patchdownloader.instancemanager.DecodeManager;
+import org.index.patchdownloader.instancemanager.DecompressManager;
 import org.index.patchdownloader.instancemanager.DownloadManager;
 import org.index.patchdownloader.instancemanager.StoreManager;
 import org.index.patchdownloader.interfaces.ICondition;
@@ -10,7 +10,7 @@ import org.index.patchdownloader.interfaces.IRequest;
 import org.index.patchdownloader.interfaces.IRequestor;
 import org.index.patchdownloader.model.holders.FileInfoHolder;
 import org.index.patchdownloader.model.linkgenerator.GeneralLinkGenerator;
-import org.index.patchdownloader.model.requests.DecodeRequest;
+import org.index.patchdownloader.model.requests.DecompressRequest;
 import org.index.patchdownloader.model.requests.DownloadRequest;
 import org.index.patchdownloader.model.requests.StoreRequest;
 import org.index.patchdownloader.util.FileUtils;
@@ -32,13 +32,13 @@ public class DownloadFiles implements IRequestor
     public void load()
     {
         DownloadManager.getInstance();
-        DecodeManager.getInstance();
+        DecompressManager.getInstance();
         StoreManager.getInstance();
 
         if (MainConfig.THREAD_USAGE)
         {
             DownloadManager.getInstance().initThreadPool(MainConfig.PARALLEL_DOWNLOADING, MainConfig.PARALLEL_DOWNLOADING);
-            DecodeManager.getInstance().initThreadPool(MainConfig.PARALLEL_DECODING, MainConfig.PARALLEL_DECODING);
+            DecompressManager.getInstance().initThreadPool(MainConfig.PARALLEL_DECODING, MainConfig.PARALLEL_DECODING);
             StoreManager.getInstance().initThreadPool(MainConfig.PARALLEL_STORING, MainConfig.PARALLEL_STORING);
         }
 
@@ -68,39 +68,39 @@ public class DownloadFiles implements IRequestor
     @Override
     public void onDownload(IRequest request)
     {
-        DecodeManager.getInstance().addRequestToQueue(new DecodeRequest(this, (DownloadRequest) request));
+        DecompressManager.getInstance().addRequestToQueue(new DecompressRequest(this, (DownloadRequest) request));
         if (!MainConfig.THREAD_USAGE)
         {
-            DecodeManager.getInstance().runQueueEntry(-1);
+            DecompressManager.getInstance().runQueueEntry(-1);
         }
     }
 
     @Override
-    public void onDecode(IRequest request)
+    public void onDecompress(IRequest request)
     {
-        DecodeRequest decodeRequest = (DecodeRequest) request;
+        DecompressRequest decompressRequest = (DecompressRequest) request;
 
         if (MainConfig.CHECK_FILE_SIZE)
         {
-            int fileLength = decodeRequest.getFileInfoHolder().getFileLength() == -1 ? decodeRequest.getFileInfoHolder().getAccessLink().getHttpLength() : decodeRequest.getFileInfoHolder().getFileLength();
-            if (fileLength != -1 && decodeRequest.getDecodedArray().length != fileLength)
+            int fileLength = decompressRequest.getFileInfoHolder().getFileLength() == -1 ? decompressRequest.getFileInfoHolder().getAccessLink().getHttpLength() : decompressRequest.getFileInfoHolder().getFileLength();
+            if (fileLength != -1 && decompressRequest.getDecompressArray().length != fileLength)
             {
-                System.out.println("File " + (decodeRequest.getLinkPath()) + " have different length than expected!");
+                System.out.println("File " + (decompressRequest.getLinkPath()) + " have different length than expected!");
             }
         }
         if (MainConfig.CHECK_HASH_SUM)
         {
-            if (decodeRequest.getFileInfoHolder().getFileHashSum() == null)
+            if (decompressRequest.getFileInfoHolder().getFileHashSum() == null)
             {
-                System.out.println("File " + (decodeRequest.getLinkPath()) + " do not have hashsum in file map.");
+                System.out.println("File " + (decompressRequest.getLinkPath()) + " do not have hashsum in file map.");
             }
-            if (!CheckSumManager.check(decodeRequest.getDecodedArray(), decodeRequest.getFileInfoHolder().getFileHashSum()))
+            if (!CheckSumManager.check(decompressRequest.getDecompressArray(), decompressRequest.getFileInfoHolder().getFileHashSum()))
             {
-                System.out.println("File " + (decodeRequest.getLinkPath()) + " not match hash sum with original file.");
+                System.out.println("File " + (decompressRequest.getLinkPath()) + " not match hash sum with original file.");
             }
         }
 
-        StoreManager.getInstance().addRequestToQueue(new StoreRequest(this, decodeRequest.getDownloadRequest(), decodeRequest.getDecodedArray()));
+        StoreManager.getInstance().addRequestToQueue(new StoreRequest(this, decompressRequest.getDownloadRequest(), decompressRequest.getDecompressArray()));
         if (!MainConfig.THREAD_USAGE)
         {
             StoreManager.getInstance().runQueueEntry(-1);
@@ -115,7 +115,7 @@ public class DownloadFiles implements IRequestor
         logStoring(MainConfig.ACMI_LIKE_LOGGING, request.getFileInfoHolder(), percentCounter);
         if (MainConfig.THREAD_USAGE)
         {
-            if (DownloadManager.getInstance().getCountOfTaskInQueue() == 0 && DecodeManager.getInstance().getCountOfTaskInQueue() == 0 && StoreManager.getInstance().getCountOfTaskInQueue() == 0)
+            if (DownloadManager.getInstance().getCountOfTaskInQueue() == 0 && DecompressManager.getInstance().getCountOfTaskInQueue() == 0 && StoreManager.getInstance().getCountOfTaskInQueue() == 0)
             {
                 System.out.println("Success!");
                 System.exit(0);

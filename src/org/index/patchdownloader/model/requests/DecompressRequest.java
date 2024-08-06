@@ -4,23 +4,23 @@ import org.index.patchdownloader.interfaces.IRequest;
 import org.index.patchdownloader.interfaces.IRequestor;
 import org.index.patchdownloader.model.holders.FileInfoHolder;
 
-public class DecodeRequest implements IRequest
+public class DecompressRequest implements IRequest
 {
     private final IRequestor _requestor;
     private final DownloadRequest _downloadRequest;
     private final byte[][] _encodeArray;
 
-    private byte[]  _decodedArray;
+    private byte[] _decompressArray;
     private boolean _completed;
 
-    public DecodeRequest(IRequestor requestor, DownloadRequest request)
+    public DecompressRequest(IRequestor requestor, DownloadRequest request)
     {
         _requestor = requestor;
         _downloadRequest = request;
         _encodeArray = null;
     }
 
-    public DecodeRequest(IRequestor requestor, byte[][] encodeArray)
+    public DecompressRequest(IRequestor requestor, byte[][] encodeArray)
     {
         _requestor = requestor;
         _downloadRequest = null;
@@ -37,14 +37,14 @@ public class DecodeRequest implements IRequest
         return (_downloadRequest == null) ? _encodeArray : (_downloadRequest.getDownloadedByteArray());
     }
 
-    public void setDecodedArray(byte[] decodedArray)
+    public void setDecompressArray(byte[] decompressArray)
     {
-        _decodedArray = decodedArray;
+        _decompressArray = decompressArray;
     }
 
-    public byte[] getDecodedArray()
+    public byte[] getDecompressArray()
     {
-        return _decodedArray;
+        return _decompressArray;
     }
 
     public DownloadRequest getDownloadRequest()
@@ -58,7 +58,7 @@ public class DecodeRequest implements IRequest
         _completed = true;
         if (_requestor != null)
         {
-            _requestor.onDecode(this);
+            _requestor.onDecompress(this);
         }
     }
 

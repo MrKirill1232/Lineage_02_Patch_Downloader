@@ -1,5 +1,6 @@
 package org.index.patchdownloader.model.linkgenerator;
 
+import org.index.patchdownloader.enums.ArchiveType;
 import org.index.patchdownloader.enums.CDNLink;
 import org.index.patchdownloader.enums.FileTypeByLink;
 import org.index.patchdownloader.model.holders.FileInfoHolder;
@@ -34,7 +35,7 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
 
         String fileListUrl = String.format(_cdnLinkType.getCdnFileListLink(), _patchVersion, _patchVersion);
 
-        FileInfoHolder fileListInfo = new FileInfoHolder(getFileListFileName(), "", false, 0);
+        FileInfoHolder fileListInfo = new FileInfoHolder(getFileListFileName(), "", ArchiveType.NONE, false, 0);
         fileListInfo.setFileLength(-1);
         fileListInfo.setAccessLink(new LinkInfoHolder(fileListInfo));
         fileListInfo.getAccessLink().setAccessLink(fileListUrl);
@@ -53,7 +54,7 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
 
         String fileMapUrl = String.format(_cdnLinkType.getGeneralCdnLink(), _patchVersion, getFileListFileHash());
 
-        FileInfoHolder fileMapInfo = new FileInfoHolder(getFileListFileHash(), "", false, 0);
+        FileInfoHolder fileMapInfo = new FileInfoHolder(getFileListFileHash(), "", ArchiveType.NONE, false, 0);
         fileMapInfo.setFileLength(-1);
         fileMapInfo.setAccessLink(new LinkInfoHolder(fileMapInfo));
         fileMapInfo.getAccessLink().setAccessLink(fileMapUrl);
@@ -155,7 +156,7 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
         String filePath = getPathOfFile(pathUndName);
         String fileName = getNameOfFile(pathUndName, !isSeparated, !original);
 
-        FileInfoHolder fileInfoHolder = new FileInfoHolder(fileName, filePath, isSeparated, countOfSeparatedParts);
+        FileInfoHolder fileInfoHolder = new FileInfoHolder(fileName, filePath, (original ? ArchiveType.LZMA_ARCHIVE : ArchiveType.NONE), isSeparated, countOfSeparatedParts);
         if ((original && countOfSeparatedParts == 0) || isSeparated)
         {
             fileInfoHolder.setAccessLink(new LinkInfoHolder(fileInfoHolder));
