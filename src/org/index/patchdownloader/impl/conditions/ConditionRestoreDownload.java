@@ -54,7 +54,7 @@ public class ConditionRestoreDownload implements ICondition
             {
                 try
                 {
-                    checkByHash = CheckSumManager.check(Files.readAllBytes(file.toPath()), fileInfoHolder.getFileHashSum());
+                    checkByHash = CheckSumManager.check(_linkGenerator.getHashingAlgorithm(), Files.readAllBytes(file.toPath()), fileInfoHolder.getFileHashSum());
                 }
                 catch (IOException e)
                 {

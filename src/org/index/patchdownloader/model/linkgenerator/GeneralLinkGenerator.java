@@ -1,6 +1,7 @@
 package org.index.patchdownloader.model.linkgenerator;
 
 import org.index.patchdownloader.enums.CDNLink;
+import org.index.patchdownloader.enums.HashType;
 import org.index.patchdownloader.model.holders.FileInfoHolder;
 
 import java.util.HashMap;
@@ -50,6 +51,8 @@ public abstract class GeneralLinkGenerator
         _patchVersion   = patchVersion;
         _fileMapHolder  = new HashMap<>();
     }
+
+    public abstract HashType getHashingAlgorithm();
 
     public abstract void load();
 

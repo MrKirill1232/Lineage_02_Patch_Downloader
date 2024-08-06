@@ -2,6 +2,7 @@ package org.index.patchdownloader.model.linkgenerator;
 
 import org.index.patchdownloader.enums.ArchiveType;
 import org.index.patchdownloader.enums.CDNLink;
+import org.index.patchdownloader.enums.HashType;
 import org.index.patchdownloader.instancemanager.DecompressManager;
 import org.index.patchdownloader.model.holders.FileInfoHolder;
 import org.index.patchdownloader.model.holders.LinkInfoHolder;
@@ -21,6 +22,12 @@ public class NcKoreanLinkGenerator extends GeneralLinkGenerator
     public NcKoreanLinkGenerator(int patchVersion)
     {
         super(CDNLink.NC_SOFT_KOREAN, patchVersion);
+    }
+
+    @Override
+    public HashType getHashingAlgorithm()
+    {
+        return HashType.SHA1;
     }
 
     @Override

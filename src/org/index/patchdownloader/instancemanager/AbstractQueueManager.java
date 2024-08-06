@@ -68,4 +68,16 @@ public abstract class AbstractQueueManager
     {
         return _requestQueue.size();
     }
+
+    public boolean isRunning()
+    {
+        for (AtomicBoolean bool : _threadsStatus)
+        {
+            if (!bool.get())
+            {
+                return false;
+            }
+        }
+        return true;
+    }
 }

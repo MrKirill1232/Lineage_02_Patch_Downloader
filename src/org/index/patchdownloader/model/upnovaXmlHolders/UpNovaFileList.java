@@ -77,7 +77,7 @@ public class UpNovaFileList implements IXmlParser
                 fileInfoHolder.setAccessLink(new LinkInfoHolder(fileInfoHolder));
                 fileInfoHolder.getAccessLink().setAccessLink(URI.create(accessLink).normalize().toString());
 
-                _fileMapHolder.put(fileInfoHolder.getLinkPath(), fileInfoHolder);
+                _fileMapHolder.put(fileInfoHolder.getLinkPath().toLowerCase(), fileInfoHolder);
             }
         }
     }

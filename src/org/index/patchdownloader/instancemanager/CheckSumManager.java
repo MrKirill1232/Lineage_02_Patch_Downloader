@@ -1,11 +1,15 @@
 package org.index.patchdownloader.instancemanager;
 
+import org.index.patchdownloader.enums.HashType;
+
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.zip.CRC32;
 
 public class CheckSumManager
 {
-    private final static MessageDigest SHA_MD_ALGORITHM;
+    private final static MessageDigest  SHA_MD_ALGORITHM;
+    private final static CRC32          CRC_32_ALGORITHM;
     static
     {
         MessageDigest md = null;
@@ -18,6 +22,8 @@ public class CheckSumManager
             throw new RuntimeException(e);
         }
         SHA_MD_ALGORITHM = md;
+
+        CRC_32_ALGORITHM = new CRC32();
     }
 
     private CheckSumManager()
@@ -25,12 +31,19 @@ public class CheckSumManager
 
     }
 
-    public static boolean check(byte[] inputArray, String checksum)
+    public static boolean check(HashType hashType, byte[] inputArray, String checksum)
     {
-        return getHashOfFile(inputArray).equals(checksum);
+        return (hashType == HashType.SHA1 ? getHashSha01OfFile(inputArray) : getHashCrc32OfFile(inputArray)).equals(checksum);
     }
 
-    public static String getHashOfFile(byte[] inputArray)
+    public static String getHashCrc32OfFile(byte[] inputArray)
+    {
+        CRC_32_ALGORITHM.reset();
+        CRC_32_ALGORITHM.update(inputArray);
+        return String.format("%08x", CRC_32_ALGORITHM.getValue());
+    }
+
+    public static String getHashSha01OfFile(byte[] inputArray)
     {
         SHA_MD_ALGORITHM.reset();
         SHA_MD_ALGORITHM.update(inputArray);

@@ -3,6 +3,7 @@ package org.index.patchdownloader.model.linkgenerator;
 import org.index.patchdownloader.config.configs.MainConfig;
 import org.index.patchdownloader.enums.ArchiveType;
 import org.index.patchdownloader.enums.CDNLink;
+import org.index.patchdownloader.enums.HashType;
 import org.index.patchdownloader.instancemanager.DownloadManager;
 import org.index.patchdownloader.model.holders.FileInfoHolder;
 import org.index.patchdownloader.model.holders.LinkInfoHolder;
@@ -31,6 +32,12 @@ public class NovaLauncherGenerator extends GeneralLinkGenerator
         }
         load();
         _fileMapHolder = Collections.emptyMap();
+    }
+
+    @Override
+    public HashType getHashingAlgorithm()
+    {
+        return HashType.CRC32;
     }
 
     @Override

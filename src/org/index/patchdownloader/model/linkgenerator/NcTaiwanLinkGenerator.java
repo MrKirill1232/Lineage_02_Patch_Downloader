@@ -3,6 +3,7 @@ package org.index.patchdownloader.model.linkgenerator;
 import org.index.patchdownloader.enums.ArchiveType;
 import org.index.patchdownloader.enums.CDNLink;
 import org.index.patchdownloader.enums.FileTypeByLink;
+import org.index.patchdownloader.enums.HashType;
 import org.index.patchdownloader.model.holders.FileInfoHolder;
 import org.index.patchdownloader.model.holders.LinkInfoHolder;
 import org.index.patchdownloader.model.requests.DownloadRequest;
@@ -23,6 +24,12 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
     protected NcTaiwanLinkGenerator(CDNLink cdnLink, int patchVersion)
     {
         super(cdnLink, patchVersion);
+    }
+
+    @Override
+    public HashType getHashingAlgorithm()
+    {
+        return HashType.SHA1;
     }
 
     @Override

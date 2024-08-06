@@ -3,6 +3,7 @@ package org.index.patchdownloader;
 import org.index.patchdownloader.config.configs.MainConfig;
 import org.index.patchdownloader.config.parsers.MainConfigParser;
 import org.index.patchdownloader.enums.CDNLink;
+import org.index.patchdownloader.enums.StartUpArgumentsEnum;
 import org.index.patchdownloader.impl.downloader.DownloadFiles;
 import org.index.patchdownloader.model.linkgenerator.GeneralLinkGenerator;
 import org.index.patchdownloader.util.FileUtils;
@@ -32,7 +33,11 @@ public class Controller
 
     public static void main(String[] args)
     {
-        MainConfigParser.getInstance().load();
+        synchronized (MainConfig.class)
+        {
+            MainConfigParser.getInstance().load();
+        }
+        parseStartUpArguments(args);
         if (!FileUtils.canGetAccessToFolder(MainConfig.DOWNLOAD_PATH))
         {
             System.out.println("Folder '" + MainConfig.DOWNLOAD_PATH + "' is closed for writing.");
@@ -60,43 +65,24 @@ public class Controller
         downloadFiles.load();
     }
 
-    private static void printInfo()
+    private static void parseStartUpArguments(String[] args)
     {
-        String str = "";
-
-        str += "This program is support arguments, and you can use them!";
-        str += "\n";
-        str += "[-cdn] - selecting download channel. Supports a 3 options. [NC_SOFT_TAIWAN] | [NC_SOFT_KOREAN] | [NC_SOFT_JAPANESE]";
-        str += "\n";
-        str += "Example: -cdn NC_SOFT_TAIWAN";
-        str += "\n";
-        str += "[-version] - selection a patch version. WARNING! THIS OPTION NOT THE SAME VERSION AS \"PROTOCOL VERSION\" OF LINEAGE 2.";
-        str += "\n";
-        str += "Patch version - its a version of installed client files. Example 89 patch is 486 game protocol on Korean.";
-        str += "\n";
-        str += "Latest knows versions (on 07/27/2024):";
-        str += "\n";
-        str += "NC_SOFT_TAIWAN   - 529";
-        str += "NC_SOFT_KOREAN   - 089";
-        str += "NC_SOFT_JAPANESE - 102";
-        str += "\n";
-        str += "Example: -version 529";
-        str += "\n";
-        str += "[-path] - output path of downloaded files.";
-        str += "\n";
-        str += "Example: -path \"C://downloads/lineage_02/429/\"";
-        str += "\n";
-        str += "[-request] - request for download path. All requested files will check by \"regex\" patterns.";
-        str += "\n";
-        str += "Examples: ";
-        str += "\n";
-        str += "01. -request system/*.u";
-        str += "\n";
-        str += "02. -request system/*.dat;system/interface.*";
-        str += "\n";
-        str += "[-sha] - will compare SHA checksum with downloaded file.";
-        str += "\n";
-
-        System.out.println(str);
+        if (args == null)
+        {
+            return;
+        }
+        for (int index = 0; index < args.length; index++)
+        {
+            StartUpArgumentsEnum argumentImpl = StartUpArgumentsEnum.getArgumentHandlerByInLineArgument(args[index]);
+            if (argumentImpl == null)
+            {
+                continue;
+            }
+            argumentImpl.handleArguments(args[index], (args.length <= (index + 1) ? null : args[index + 1]));
+            if (argumentImpl.requiredPossibleValue())
+            {
+                index += 1;
+            }
+        }
     }
 }

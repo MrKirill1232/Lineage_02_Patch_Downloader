@@ -1,5 +1,6 @@
 package org.index.patchdownloader.impl;
 
+import org.index.patchdownloader.enums.HashType;
 import org.index.patchdownloader.instancemanager.CheckSumManager;
 import org.index.patchdownloader.util.FileUtils;
 
@@ -13,7 +14,7 @@ import java.util.Set;
 
 public class CompareBothSystems
 {
-    public static void startComparing(File pathToFirstSystem, File pathToSecondSystem)
+    public static void startComparing(HashType hashType, File pathToFirstSystem, File pathToSecondSystem)
     {
         File[] filesOfFSystem = FileUtils.getFileList(pathToFirstSystem , 2);
         File[] filesOfSSystem = FileUtils.getFileList(pathToSecondSystem, 2);
@@ -47,7 +48,7 @@ public class CompareBothSystems
             {
                 notComparedFiles.computeIfAbsent(("WRONG_FILE_SIZE"), v -> new HashSet<>()).add(patchKey);
             }
-            else if (!getHashSum(fileOfFsystem).equalsIgnoreCase(getHashSum(fileOfSsystem)))
+            else if (!getHashSum(hashType, fileOfFsystem).equalsIgnoreCase(getHashSum(hashType, fileOfSsystem)))
             {
                 notComparedFiles.computeIfAbsent(("WRONG_HASHSUM"), v -> new HashSet<>()).add(patchKey);
             }
@@ -82,11 +83,11 @@ public class CompareBothSystems
         return pathToCurrFile.substring(pathToDownload.length() + 1);
     }
 
-    private static String getHashSum(File file)
+    private static String getHashSum(HashType hashType, File file)
     {
         try (FileInputStream fis = new FileInputStream(file))
         {
-            return CheckSumManager.getHashOfFile(fis.readAllBytes());
+            return hashType == HashType.SHA1 ? CheckSumManager.getHashSha01OfFile(fis.readAllBytes()) : CheckSumManager.getHashCrc32OfFile(fis.readAllBytes());
         }
         catch (IOException ignored)
         {
@@ -97,6 +98,6 @@ public class CompareBothSystems
 
     public static void main(String[] args)
     {
-        startComparing(new File("Z:\\SourceProjects\\output\\system"), new File("D:\\LINEAGE_2_ARCHIVE\\ACTUAL\\NC_KOREAN\\Lineage2_KR\\system_original"));
+        startComparing(HashType.SHA1, new File("Z:\\SourceProjects\\output\\system"), new File("D:\\LINEAGE_2_ARCHIVE\\ACTUAL\\NC_KOREAN\\Lineage2_KR\\system_original"));
     }
 }
