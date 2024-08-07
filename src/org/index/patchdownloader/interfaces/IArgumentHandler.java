@@ -39,6 +39,6 @@ public interface IArgumentHandler
 
     default void log(String logString)
     {
-        System.err.println(logString);
+        IDummyLogger.log(IDummyLogger.INFO, logString);
     }
 }

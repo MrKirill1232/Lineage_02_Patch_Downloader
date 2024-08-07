@@ -47,9 +47,6 @@ public class MainConfig implements IConfig
     @ConfigParameter(parameterName = "restore_downloading")
     public static boolean RESTORE_DOWNLOADING = false;
 
-    @ConfigParameter(parameterName = "check_files_before_downloading")
-    public static boolean CHECK_BEFORE_DOWNLOADING = false;
-
     @ConfigParameter(parameterName = "check_files_by_name")
     public static boolean CHECK_BY_NAME = false;
 
@@ -88,6 +85,16 @@ public class MainConfig implements IConfig
     @ConfigParameter(parameterName = "up_nova_launcher_url", canBeNull = true)
     public static String UP_NOVA_LAUNCHER_URL = null;
 
+    // on null - PatchPath
+    @ConfigParameter(parameterName = "up_nova_launcher_patch_path", canBeNull = true)
+    public static String UP_NOVA_LAUNCHER_PATCH_PATH = null;
+
+    @ConfigParameter(parameterName = "thread_on_parallel_file_check")
+    public static int THREAD_COUNT_FOR_FILE_CHECK_IN_CONDITION = 1;
+
+    @ConfigParameter(parameterName = "logging_progress_of_file_check")
+    public static boolean LOGGING_FILE_CHECK_IN_CONDITION = true;
+
     @Override
     public void onLoad()
     {
@@ -109,6 +116,11 @@ public class MainConfig implements IConfig
             DOWNLOAD_PATH = new File(PATH_TO_RUNNING + "/output");
             info += "Downloading path is not setup. Variable " + "DOWNLOAD_PATH" + " updated. New value is \"" + DOWNLOAD_PATH.toString() + "\";" + "\n";
         }
+        if (CDN_SOURCE == CDNLink.UP_NOVA_LAUNCHER && UP_NOVA_LAUNCHER_PATCH_PATH == null)
+        {
+            UP_NOVA_LAUNCHER_PATCH_PATH = "PatchPath";
+            info += "Upnova Patch Path is not setup. Variable " + "UP_NOVA_LAUNCHER_PATCH_PATH" + " updated. New value is \"" + UP_NOVA_LAUNCHER_PATCH_PATH.toString() + "\";" + "\n";
+        }
         if (DEVELOPER)
         {
             PARALLEL_DOWNLOADING = 1;
@@ -121,8 +133,6 @@ public class MainConfig implements IConfig
             info += "Developer option enabled. Variable " + "CHECK_HASH_SUM" + " updated. New value is \"" + CHECK_HASH_SUM + "\";" + "\n";
             RESTORE_DOWNLOADING = false;
             info += "Developer option enabled. Variable " + "RESTORE_DOWNLOADING" + " updated. New value is \"" + RESTORE_DOWNLOADING + "\";" + "\n";
-            CHECK_BEFORE_DOWNLOADING = false;
-            info += "Developer option enabled. Variable " + "CHECK_BEFORE_DOWNLOADING" + " updated. New value is \"" + CHECK_BEFORE_DOWNLOADING + "\";" + "\n";
         }
         System.out.print(info);
     }

@@ -29,7 +29,7 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
     @Override
     public HashType getHashingAlgorithm()
     {
-        return HashType.SHA1;
+        return HashType.SHA01;
     }
 
     @Override

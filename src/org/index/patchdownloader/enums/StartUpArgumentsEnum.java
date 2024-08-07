@@ -54,7 +54,7 @@ public enum StartUpArgumentsEnum implements IArgumentHandler
                 public void handleArgumentsImpl(String requestedArgument, String possibleValue)
                 {
                     String valueInArg = replaceIllegalSymbolsInPath(replaceQuoteOnBeginAndEnd(possibleValue));
-                    File requestFile = new File(URI.create(valueInArg).normalize());
+                    File requestFile = new File(URI.create(valueInArg).normalize().toString());
                     MainConfig.DOWNLOAD_PATH = requestFile;
                     log("Found start-up argument '" + requestedArgument + "'. Variable " + "DOWNLOAD_PATH" + " updated. New value is \"" + String.valueOf(requestFile) + "\";");
                 }
@@ -160,6 +160,21 @@ public enum StartUpArgumentsEnum implements IArgumentHandler
                     return true;
                 }
             },
+    ARGUMENT_UP_NOVA_LAUNCHER_PATCH_PATH("-upnova_patch_path")
+            {
+                @Override
+                public void handleArgumentsImpl(String requestedArgument, String possibleValue)
+                {
+                    MainConfig.UP_NOVA_LAUNCHER_PATCH_PATH = URI.create(replaceIllegalSymbolsInPath(possibleValue)).normalize().toString();
+                    log("Found start-up argument '" + requestedArgument + "'. Variable " + "UP_NOVA_LAUNCHER_PATCH_PATH" + " updated. New value is \"" + String.valueOf(MainConfig.UP_NOVA_LAUNCHER_PATCH_PATH) + "\";");
+                }
+
+                @Override
+                public boolean requiredPossibleValue()
+                {
+                    return true;
+                }
+            },
     ARGUMENT_RESTORE_DOWNLOADING("-restore")
             {
                 @Override
@@ -185,6 +200,61 @@ public enum StartUpArgumentsEnum implements IArgumentHandler
                 {
                     MainConfig.CHECK_BY_HASH_SUM = true;
                     log("Found start-up argument '" + requestedArgument + "'. Variable " + "CHECK_BY_HASH_SUM" + " updated. New value is \"" + String.valueOf(MainConfig.CHECK_BY_HASH_SUM) + "\";");
+                }
+            },
+    ARGUMENT_THREAD_USAGE("-thread")
+            {
+                @Override
+                public void handleArgumentsImpl(String requestedArgument, String possibleValue)
+                {
+                    MainConfig.THREAD_USAGE = true;
+                    log("Found start-up argument '" + requestedArgument + "'. Variable " + "THREAD_USAGE" + " updated. New value is \"" + String.valueOf(MainConfig.THREAD_USAGE) + "\";");
+                }
+            },
+    ARGUMENT_THREADS_ON_DOWNLOADING("-threads_download")
+            {
+                @Override
+                public void handleArgumentsImpl(String requestedArgument, String possibleValue)
+                {
+                    int requestValue = ParseUtils.parseInteger(possibleValue, -1);
+                    MainConfig.PARALLEL_DOWNLOADING = requestValue;
+                    log("Found start-up argument '" + requestedArgument + "'. Variable " + "PARALLEL_DOWNLOADING" + " updated. New value is \"" + String.valueOf(requestValue) + "\";");
+                }
+            },
+    ARGUMENT_THREADS_ON_DECOMPRESSING("-threads_decompress")
+            {
+                @Override
+                public void handleArgumentsImpl(String requestedArgument, String possibleValue)
+                {
+                    int requestValue = ParseUtils.parseInteger(possibleValue, -1);
+                    MainConfig.PARALLEL_DECODING = requestValue;
+                    log("Found start-up argument '" + requestedArgument + "'. Variable " + "PARALLEL_DECODING" + " updated. New value is \"" + String.valueOf(requestValue) + "\";");
+                }
+            },
+    ARGUMENT_THREADS_ON_SAVING("-threads_saving")
+            {
+                @Override
+                public void handleArgumentsImpl(String requestedArgument, String possibleValue)
+                {
+                    int requestValue = ParseUtils.parseInteger(possibleValue, -1);
+                    MainConfig.PARALLEL_STORING = requestValue;
+                    log("Found start-up argument '" + requestedArgument + "'. Variable " + "PARALLEL_STORING" + " updated. New value is \"" + String.valueOf(requestValue) + "\";");
+                }
+            },
+    ARGUMENT_THREADS_ON_FILE_CHECK("-threads_check")
+            {
+                @Override
+                public void handleArgumentsImpl(String requestedArgument, String possibleValue)
+                {
+                    int requestValue = ParseUtils.parseInteger(possibleValue, -1);
+                    MainConfig.THREAD_COUNT_FOR_FILE_CHECK_IN_CONDITION = requestValue;
+                    log("Found start-up argument '" + requestedArgument + "'. Variable " + "THREAD_COUNT_FOR_FILE_CHECK_IN_CONDITION" + " updated. New value is \"" + String.valueOf(requestValue) + "\";");
+                }
+
+                @Override
+                public boolean requiredPossibleValue()
+                {
+                    return true;
                 }
             },
     ARGUMENT_HELP("-h", "-help")

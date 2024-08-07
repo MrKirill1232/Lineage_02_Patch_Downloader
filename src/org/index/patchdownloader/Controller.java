@@ -5,10 +5,11 @@ import org.index.patchdownloader.config.parsers.MainConfigParser;
 import org.index.patchdownloader.enums.CDNLink;
 import org.index.patchdownloader.enums.StartUpArgumentsEnum;
 import org.index.patchdownloader.impl.downloader.DownloadFiles;
+import org.index.patchdownloader.interfaces.IDummyLogger;
 import org.index.patchdownloader.model.linkgenerator.GeneralLinkGenerator;
 import org.index.patchdownloader.util.FileUtils;
 
-public class Controller
+public class Controller implements IDummyLogger
 {
     private final CDNLink _cdnType;
     private final int _patchVersion;
@@ -22,47 +23,38 @@ public class Controller
         _fileLinkGenerator = GeneralLinkGenerator.generateLinkToFiles(_cdnType, _patchVersion);
         if (_fileLinkGenerator == null)
         {
-            throw new IllegalArgumentException("CDN Link is unsupported!");
+            IDummyLogger.log(IDummyLogger.ERROR, "Patch version is unavailable. Version: " + MainConfig.PATCH_VERSION_SOURCE + "; CDN Source: " + MainConfig.CDN_SOURCE + ";");
+            return;
         }
         _fileLinkGenerator.load();
         if (_fileLinkGenerator.getFileMapHolder().isEmpty())
         {
-            throw new IllegalArgumentException("Cannot fetch file info about protocol from requested CDN. Try another CDN or Patch version.");
+            IDummyLogger.log(IDummyLogger.ERROR, "Patch version is unavailable. Version: " + MainConfig.PATCH_VERSION_SOURCE + "; CDN Source: " + MainConfig.CDN_SOURCE + ";");
         }
+        IDummyLogger.log(IDummyLogger.INFO, "Version: " + MainConfig.PATCH_VERSION_SOURCE + "; CDN Source: " + MainConfig.CDN_SOURCE + "; Total available files: " + _fileLinkGenerator.getFileMapHolder().size() + ";");
+        IDummyLogger.log(IDummyLogger.INFO, "File list obtained. Program continue working...");
+
+        DownloadFiles downloadFiles = new DownloadFiles(_fileLinkGenerator);
+
+
+        downloadFiles.load();
     }
 
     public static void main(String[] args)
     {
-        synchronized (MainConfig.class)
-        {
-            MainConfigParser.getInstance().load();
-        }
+        MainConfigParser.getInstance().load();
         parseStartUpArguments(args);
         if (!FileUtils.canGetAccessToFolder(MainConfig.DOWNLOAD_PATH))
         {
-            System.out.println("Folder '" + MainConfig.DOWNLOAD_PATH + "' is closed for writing.");
+            IDummyLogger.log(IDummyLogger.ERROR, "Folder '" + MainConfig.DOWNLOAD_PATH + "' is closed for writing.");
             return;
         }
         if (MainConfig.CDN_SOURCE == null)
         {
-            System.out.println("CDN Source is Undefined.");
+            IDummyLogger.log(IDummyLogger.ERROR, "CDN Source is Undefined.");
             return;
         }
-        GeneralLinkGenerator generalLinkGenerator = GeneralLinkGenerator.generateLinkToFiles(MainConfig.CDN_SOURCE, MainConfig.PATCH_VERSION_SOURCE);
-        if (generalLinkGenerator == null)
-        {
-            System.out.println("Patch version is unavailable. Version: " + MainConfig.PATCH_VERSION_SOURCE + "; CDN Source: " + MainConfig.CDN_SOURCE + ";");
-            return;
-        }
-        generalLinkGenerator.load();
-        if (generalLinkGenerator.getFileMapHolder().isEmpty())
-        {
-            System.out.println("Patch version is unavailable. Version: " + MainConfig.PATCH_VERSION_SOURCE + "; CDN Source: " + MainConfig.CDN_SOURCE + ";");
-            return;
-        }
-
-        DownloadFiles downloadFiles = new DownloadFiles(generalLinkGenerator);
-        downloadFiles.load();
+        new Controller(MainConfig.CDN_SOURCE, MainConfig.PATCH_VERSION_SOURCE);
     }
 
     private static void parseStartUpArguments(String[] args)

@@ -1,6 +1,7 @@
 package org.index.patchdownloader.instancemanager;
 
 import org.index.patchdownloader.config.configs.MainConfig;
+import org.index.patchdownloader.interfaces.IDummyLogger;
 import org.index.patchdownloader.interfaces.IRequest;
 import org.index.patchdownloader.model.holders.FileInfoHolder;
 import org.index.patchdownloader.model.holders.LinkInfoHolder;
@@ -12,7 +13,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
-public class DownloadManager extends AbstractQueueManager
+public class DownloadManager extends AbstractQueueManager implements IDummyLogger
 {
     private final static DownloadManager INSTANCE = new DownloadManager();
 
@@ -62,9 +63,9 @@ public class DownloadManager extends AbstractQueueManager
         DownloadRequest downloaded = download(httpClient, downloadRequest);
         if (downloaded == null && (MainConfig.MAX_DOWNLOAD_ATTEMPTS == -1 || downloadRequest.getDownloadingAttempts() <= MainConfig.MAX_DOWNLOAD_ATTEMPTS))
         {
+            IDummyLogger.log(IDummyLogger.WARNING, "Trying to re-start downloading for file: '" + downloadRequest.getLinkPath() + "'. Re-download attempt - " + downloadRequest.getDownloadingAttempts() + 1 + ";");
             downloadRequest.getFileInfoHolder().getAccessLink().setHttpStatus(-1);
             downloadRequest.setDownloadingAttempts(downloadRequest.getDownloadingAttempts() + 1);
-            System.out.println("Trying to re-start downloading for file: '" + downloadRequest.getLinkPath() + "';");
             addRequestToQueue(downloadRequest);
             return;
         }

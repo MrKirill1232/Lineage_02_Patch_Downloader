@@ -1,12 +1,11 @@
 package org.index.patchdownloader.impl;
 
 import org.index.patchdownloader.enums.HashType;
-import org.index.patchdownloader.instancemanager.CheckSumManager;
+import org.index.patchdownloader.instancemanager.HashingManager;
+import org.index.patchdownloader.interfaces.IHashingAlgorithm;
 import org.index.patchdownloader.util.FileUtils;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -85,19 +84,12 @@ public class CompareBothSystems
 
     private static String getHashSum(HashType hashType, File file)
     {
-        try (FileInputStream fis = new FileInputStream(file))
-        {
-            return hashType == HashType.SHA1 ? CheckSumManager.getHashSha01OfFile(fis.readAllBytes()) : CheckSumManager.getHashCrc32OfFile(fis.readAllBytes());
-        }
-        catch (IOException ignored)
-        {
-
-        }
-        return "";
+        IHashingAlgorithm hashingAlgorithm = HashingManager.getAvailableHashingAlgorithm(hashType, false);
+        return hashingAlgorithm == null ? "" : hashingAlgorithm.calculateHash(file);
     }
 
     public static void main(String[] args)
     {
-        startComparing(HashType.SHA1, new File("Z:\\SourceProjects\\output\\system"), new File("D:\\LINEAGE_2_ARCHIVE\\ACTUAL\\NC_KOREAN\\Lineage2_KR\\system_original"));
+        startComparing(HashType.SHA01, new File("Z:\\SourceProjects\\output\\system"), new File("D:\\LINEAGE_2_ARCHIVE\\ACTUAL\\NC_KOREAN\\Lineage2_KR\\system_original"));
     }
 }

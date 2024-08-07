@@ -66,7 +66,7 @@ public class NovaLauncherGenerator extends GeneralLinkGenerator
         httpClient.close();
         //------------------------------------------------------------------------------------------------------//
         UpNovaUpdateConfig upNovaUpdateConfig = new UpNovaUpdateConfig();
-        upNovaUpdateConfig.parseXmlString(updateConfigInfo.getFilePath(), new String(updateConfigRequest.getDownloadedByteArray()[0]));
+        upNovaUpdateConfig.parseXmlString(updateConfigInfo.getAccessLink().getAccessLink(), new String(updateConfigRequest.getDownloadedByteArray()[0]));
         _upNovaUpdateConfig = upNovaUpdateConfig;
     }
 

@@ -1,6 +1,7 @@
 package org.index.patchdownloader.model.decompress;
 
 import org.index.patchdownloader.interfaces.IDecompressor;
+import org.index.patchdownloader.interfaces.IDummyLogger;
 import org.index.patchdownloader.model.requests.DownloadRequest;
 
 import java.io.ByteArrayInputStream;
@@ -9,7 +10,7 @@ import java.nio.ByteBuffer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-public class ZipDecompressor implements IDecompressor
+public class ZipDecompressor implements IDummyLogger, IDecompressor
 {
 
     @Override
@@ -34,7 +35,7 @@ public class ZipDecompressor implements IDecompressor
 
             if (zipInputStream.getNextEntry() != null)
             {
-                System.out.println("WARNING! UNSUPPORTED MULTIPLE ENTRY INSIDE FILE. DOWNLOADING URL: " + request.getFileInfoHolder().getAccessLink().getAccessLink() + " ;");
+                IDummyLogger.log(ERROR, getClass(), "Unsupported multiple entry inside archive. File available by URL: '" + request.getFileInfoHolder().getAccessLink().getAccessLink() + "';", null);
             }
 
             return decodeBuffer.array();
@@ -55,7 +56,7 @@ public class ZipDecompressor implements IDecompressor
         {
             if (request.getDownloadedByteArray().length > 1)
             {
-                System.out.println("Cannot decode input array by ZIP method. Reason: " + "Uncompressed length is not correct! Next size found: " + allocateBufferSize + ". File '" + request.getLinkPath() + "';");
+                IDummyLogger.log(ERROR, getClass(),"Cannot decode input array by ZIP method. Reason: " + "Uncompressed length is not correct! Next size found: " + allocateBufferSize + ". File '" + request.getLinkPath() + "';", null);
                 return false;
             }
             // System.out.println("Cannot decode input array by ZIP method. Reason: " + "File is not a archive. File '" + request.getLinkPath() + "';");

@@ -63,8 +63,8 @@ public class UpNovaFileList implements IXmlParser
             {
                 StatSet fileModelSet = IXmlParser.parseTextToStatSet(fileModelElements);
 
-                String name = fileModelSet.getString("Name", null);
-                String path = fileModelSet.getString("Path", null);
+                String name = fileModelSet.getString("Name", null).replaceAll("\\\\", "/");;
+                String path = fileModelSet.getString("Path", null).replaceAll("\\\\", "/");;
                 String size = fileModelSet.getString("Size", null);
                 String hash = fileModelSet.getString("Hash", null);
 

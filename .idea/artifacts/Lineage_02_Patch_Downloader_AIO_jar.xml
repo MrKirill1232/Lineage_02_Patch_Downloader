@@ -4,9 +4,8 @@
     <root id="archive" name="Lineage_02_Patch_Downloader.jar">
       <element id="module-output" name="Lineage_02_Patch_Downloader" />
       <element id="extracted-dir" path="$PROJECT_DIR$/libs/xz-1.9.jar" path-in-jar="/" />
-      <element id="extracted-dir" path="$PROJECT_DIR$/libs/xz-1.9-source.jar" path-in-jar="/" />
       <element id="extracted-dir" path="$PROJECT_DIR$/libs/json-simple-1.1.1.jar" path-in-jar="/" />
-      <element id="extracted-dir" path="$PROJECT_DIR$/libs/json-simple-1.1.1-sources.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/libs/dom4j-2.1.4.jar" path-in-jar="/" />
     </root>
   </artifact>
 </component>

@@ -2,6 +2,7 @@ package org.index.patchdownloader.model.upnovaXmlHolders;
 
 import org.dom4j.Document;
 import org.dom4j.Element;
+import org.index.patchdownloader.config.configs.MainConfig;
 import org.index.patchdownloader.util.StatSet;
 import org.index.patchdownloader.util.xml.IXmlParser;
 
@@ -21,7 +22,11 @@ public class UpNovaUpdateConfig implements IXmlParser
             _updaterTitle = statSet.getString("UpdaterTitle", null);
             _updaterVersion = statSet.getString("UpdaterVersion", null);
             _selfUpdatePath = statSet.getString("SelfUpdatePath", null);
-            _patchPath = statSet.getString("PatchPath", null);
+            _patchPath = statSet.getString((MainConfig.UP_NOVA_LAUNCHER_PATCH_PATH == null ? "PatchPath" : MainConfig.UP_NOVA_LAUNCHER_PATCH_PATH), null);
+            if (_patchPath == null)
+            {
+                System.err.println("Used a UpNova Launcher URL Generator. Warning! PatchPath is not setup! Use a [-upnova_patch_path] start-up argument with 'PatchPath' variable or set it in Main.ini as [up_nova_launcher_patch_path] variable. UpdateConfig.xml available by next URL: " + xmlInfo + ";");
+            }
         }
     }
 

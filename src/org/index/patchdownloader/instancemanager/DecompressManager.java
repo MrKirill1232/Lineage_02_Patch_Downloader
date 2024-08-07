@@ -19,11 +19,11 @@ public class DecompressManager extends AbstractQueueManager
         return INSTANCE;
     }
 
-    private final static IDecompressor[] DECOMPRESSOR_CLASSES = new IDecompressor[ArchiveType.values().length];
+    private final static IDecompressor[] DECOMPRESS_CLASSES = new IDecompressor[ArchiveType.values().length];
     static
     {
-        DECOMPRESSOR_CLASSES[ArchiveType.LZMA_ARCHIVE.ordinal()] = new LzmaDecompressor();
-        DECOMPRESSOR_CLASSES[ArchiveType.ZIP_ARCHIVE.ordinal()] = new ZipDecompressor();
+        DECOMPRESS_CLASSES[ArchiveType.LZMA_ARCHIVE.ordinal()] = new LzmaDecompressor();
+        DECOMPRESS_CLASSES[ArchiveType.ZIP_ARCHIVE.ordinal()] = new ZipDecompressor();
     }
 
 
@@ -72,7 +72,7 @@ public class DecompressManager extends AbstractQueueManager
             compressedDataBuffer.put(encodeArray[fIndex]);
         }
 
-        IDecompressor decompressor = DECOMPRESSOR_CLASSES[request.getFileInfoHolder().getCompressType().ordinal()];
+        IDecompressor decompressor = DECOMPRESS_CLASSES[request.getFileInfoHolder().getCompressType().ordinal()];
         if (decompressor == null || !decompressor.check(request, totalArrayLength, compressedDataBuffer.array()))
         {
             return compressedDataBuffer.array();

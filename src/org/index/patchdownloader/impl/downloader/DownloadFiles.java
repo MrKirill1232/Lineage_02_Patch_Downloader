@@ -1,11 +1,12 @@
 package org.index.patchdownloader.impl.downloader;
 
 import org.index.patchdownloader.config.configs.MainConfig;
-import org.index.patchdownloader.instancemanager.CheckSumManager;
+import org.index.patchdownloader.instancemanager.HashingManager;
 import org.index.patchdownloader.instancemanager.DecompressManager;
 import org.index.patchdownloader.instancemanager.DownloadManager;
 import org.index.patchdownloader.instancemanager.StoreManager;
 import org.index.patchdownloader.interfaces.ICondition;
+import org.index.patchdownloader.interfaces.IDummyLogger;
 import org.index.patchdownloader.interfaces.IRequest;
 import org.index.patchdownloader.interfaces.IRequestor;
 import org.index.patchdownloader.model.holders.FileInfoHolder;
@@ -22,7 +23,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class DownloadFiles implements IRequestor
+public class DownloadFiles implements IRequestor, IDummyLogger
 {
     private final AtomicInteger _simpleCounter = new AtomicInteger();
 
@@ -46,11 +47,10 @@ public class DownloadFiles implements IRequestor
 
         if ((isCompleted || !isLinksGenerated) && (isQueueClear && !isHardTaskRunning))
         {
-            System.out.println("Success!");
+            IDummyLogger.log(IDummyLogger.FINE, "Success!");
             System.exit(0);
         }
     }
-
 
     public void load()
     {
@@ -76,7 +76,7 @@ public class DownloadFiles implements IRequestor
             if (!FileUtils.createSubFolders(MainConfig.DOWNLOAD_PATH, fileInfoHolder))
             {
                 _simpleCounter.addAndGet(1);
-                System.out.println("Cannot create a " + (fileInfoHolder.getLinkPath()) + ". Ignoring.");
+                IDummyLogger.log(IDummyLogger.ERROR, "Cannot create a " + (fileInfoHolder.getLinkPath()) + ". Ignoring.");
                 continue;
             }
 
@@ -111,20 +111,20 @@ public class DownloadFiles implements IRequestor
         if (MainConfig.CHECK_FILE_SIZE)
         {
             int fileLength = decompressRequest.getFileInfoHolder().getFileLength() == -1 ? decompressRequest.getFileInfoHolder().getAccessLink().getHttpLength() : decompressRequest.getFileInfoHolder().getFileLength();
-            if (fileLength != -1 && decompressRequest.getDecompressArray().length != fileLength)
+            if (fileLength <= 0 && decompressRequest.getDecompressArray().length != fileLength)
             {
-                System.out.println("File " + (decompressRequest.getLinkPath()) + " have different length than expected!");
+                IDummyLogger.log(IDummyLogger.WARNING, "File '" + (decompressRequest.getLinkPath()) + "' have different length than expected!");
             }
         }
         if (MainConfig.CHECK_HASH_SUM)
         {
             if (decompressRequest.getFileInfoHolder().getFileHashSum() == null)
             {
-                System.out.println("File " + (decompressRequest.getLinkPath()) + " do not have hash sum in file map.");
+                IDummyLogger.log(IDummyLogger.WARNING, "File '" + (decompressRequest.getLinkPath()) + "' do not have original hash-sum in file-map! Skip Hash-sum check for this file.");
             }
-            if (!CheckSumManager.check(_linkGenerator.getHashingAlgorithm(), decompressRequest.getDecompressArray(), decompressRequest.getFileInfoHolder().getFileHashSum()))
+            if (!HashingManager.check(_linkGenerator.getHashingAlgorithm(), decompressRequest.getDecompressArray(), decompressRequest.getFileInfoHolder().getFileHashSum()))
             {
-                System.out.println("File " + (decompressRequest.getLinkPath()) + " not match hash sum with original file.");
+                IDummyLogger.log(IDummyLogger.WARNING, "File '" + (decompressRequest.getLinkPath()) + "' hash-sum is different from original file from file-map! Skip Hash-sum check for this file.");
             }
         }
 
@@ -139,25 +139,24 @@ public class DownloadFiles implements IRequestor
     public void onStore(IRequest request)
     {
         _simpleCounter.addAndGet(1);
-        int percentCounter = (int) ((double) _simpleCounter.get() / (double) _linkGenerator.getFileMapHolder().size() * 100d);
-        logStoring(MainConfig.ACMI_LIKE_LOGGING, request.getFileInfoHolder(), percentCounter);
+        logStoring(MainConfig.ACMI_LIKE_LOGGING, request.getFileInfoHolder(), IDummyLogger.getPercentOfCompletion(_simpleCounter.get(), _linkGenerator.getFileMapHolder().size()));
     }
 
     private static void logStoring(boolean acmiLike, FileInfoHolder fileInfoHolder, int percentCounter)
     {
         if (fileInfoHolder == null)
         {
-            System.out.println("??: " + "FAIL");
+            IDummyLogger.log(INFO, "??? : FAIL");
         }
         else
         {
             if (acmiLike)
             {
-                System.out.println(fileInfoHolder.getLinkPath() + ": OK");
+                IDummyLogger.log(INFO, fileInfoHolder.getLinkPath() + ": OK");
             }
             else
             {
-                System.out.println("Progress " + percentCounter + "% / 100%" + " | " + "Storing '" + (fileInfoHolder.getLinkPath()) + "'...");
+                IDummyLogger.log(INFO, "Progress " + IDummyLogger.getPercentMessage(percentCounter) + " | " + "Storing '" + (fileInfoHolder.getLinkPath()) + "'...");
             }
         }
     }

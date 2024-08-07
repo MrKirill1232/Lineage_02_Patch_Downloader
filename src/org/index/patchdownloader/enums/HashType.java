@@ -2,7 +2,7 @@ package org.index.patchdownloader.enums;
 
 public enum HashType
 {
-    SHA1,
+    SHA01,
     CRC32,
 
     ;
