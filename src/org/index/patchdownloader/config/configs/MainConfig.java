@@ -90,7 +90,7 @@ public class MainConfig implements IConfig
     public static int THREAD_COUNT_FOR_FILE_CHECK_IN_CONDITION = 1;
 
     @ConfigParameter(parameterName = "logging_progress_of_file_check")
-    public static boolean LOGGING_FILE_CHECK_IN_CONDITION = true;
+    public static boolean LOGGING_FILE_CHECK_IN_CONDITION = false;
 
     @Override
     public void onLoad()
