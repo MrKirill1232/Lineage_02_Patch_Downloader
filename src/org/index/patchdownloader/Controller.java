@@ -32,7 +32,7 @@ public class Controller implements IDummyLogger
             IDummyLogger.log(IDummyLogger.ERROR, "Patch version is unavailable. Version: " + MainConfig.PATCH_VERSION_SOURCE + "; CDN Source: " + MainConfig.CDN_SOURCE + ";");
         }
         IDummyLogger.log(IDummyLogger.INFO, "Version: " + MainConfig.PATCH_VERSION_SOURCE + "; CDN Source: " + MainConfig.CDN_SOURCE + "; Total available files: " + _fileLinkGenerator.getFileMapHolder().size() + ";");
-        IDummyLogger.log(IDummyLogger.INFO, "File list obtained. Program continue working...");
+        IDummyLogger.log(IDummyLogger.INFO, "Download list obtained. Program continue working...");
 
         DownloadFiles downloadFiles = new DownloadFiles(_fileLinkGenerator);
         downloadFiles.load();
