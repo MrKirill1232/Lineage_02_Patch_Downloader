@@ -62,7 +62,7 @@ public class ConditionCheckFiles implements IDummyLogger, ILoadable, ICondition,
     {
         IDummyLogger.log(IDummyLogger.INFO, getClass(),"load() method bump. Generating file list from existed files...", null);
         _fileListMap = FileUtils.getFileListForEasyCheck(MainConfig.DOWNLOAD_PATH, MainConfig.DEPTH_OF_FILE_CHECK, true);
-        _nextPercentNumber = (_fileListMap.size() / 100) / 2;
+        _nextPercentNumber = Math.max(0, ((_fileListMap.size() / 100) / 2));
         IDummyLogger.log(IDummyLogger.FINE, getClass(), "File list generated!" + " " + "Loaded " + _fileListMap.size() + " files.", null);
         if (_executor != null)
         {
