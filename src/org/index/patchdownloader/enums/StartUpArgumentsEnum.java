@@ -257,6 +257,15 @@ public enum StartUpArgumentsEnum implements IArgumentHandler
                     return true;
                 }
             },
+    ARGUMENT_LOG_FILE_CHECK_PROGRESS("-log_check")
+            {
+                @Override
+                public void handleArgumentsImpl(String requestedArgument, String possibleValue)
+                {
+                    MainConfig.LOGGING_FILE_CHECK_IN_CONDITION = true;
+                    log("Found start-up argument '" + requestedArgument + "'. Variable " + "LOGGING_FILE_CHECK_IN_CONDITION" + " updated. New value is \"" + String.valueOf(MainConfig.LOGGING_FILE_CHECK_IN_CONDITION) + "\";");
+                }
+            },
     ARGUMENT_HELP("-h", "-help")
             {
                 @Override
