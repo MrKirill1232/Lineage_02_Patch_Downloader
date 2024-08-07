@@ -35,8 +35,6 @@ public class Controller implements IDummyLogger
         IDummyLogger.log(IDummyLogger.INFO, "File list obtained. Program continue working...");
 
         DownloadFiles downloadFiles = new DownloadFiles(_fileLinkGenerator);
-
-
         downloadFiles.load();
     }
 

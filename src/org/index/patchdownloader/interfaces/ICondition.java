@@ -40,7 +40,7 @@ public interface ICondition
                 return false;
             }
         }
-        return false;
+        return MainConfig.INCLUDE_FILE_FILTER != null && MainConfig.INCLUDE_FILE_FILTER.isEmpty();
     }
 
     public static List<ICondition> loadConditions(GeneralLinkGenerator generalLinkGenerator)

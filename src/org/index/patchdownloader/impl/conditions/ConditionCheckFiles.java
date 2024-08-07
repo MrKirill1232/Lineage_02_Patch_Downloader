@@ -44,11 +44,11 @@ public class ConditionCheckFiles implements IDummyLogger, ILoadable, ICondition,
         _linkGenerator  = linkGenerator;
         _excludeFileList= new CopyOnWriteArraySet<>();
         _fileListMap    = null;
-
-        if (MainConfig.THREAD_COUNT_FOR_FILE_CHECK_IN_CONDITION > 1)
+        int totalParts = Math.max(1, (Math.min((_linkGenerator.getFileMapHolder().size() / 100), MainConfig.THREAD_COUNT_FOR_FILE_CHECK_IN_CONDITION)));
+        if (totalParts > 1)
         {
-            _executor = NamedExecutorServiceUtils.scheduledThreadPool((MainConfig.THREAD_COUNT_FOR_FILE_CHECK_IN_CONDITION), "Check files before downloading.");
-            _threads  = new ScheduledFuture[MainConfig.THREAD_COUNT_FOR_FILE_CHECK_IN_CONDITION];
+            _executor = NamedExecutorServiceUtils.scheduledThreadPool((totalParts), "Check files before downloading.");
+            _threads  = new ScheduledFuture[totalParts];
         }
         else
         {
@@ -62,20 +62,20 @@ public class ConditionCheckFiles implements IDummyLogger, ILoadable, ICondition,
     {
         IDummyLogger.log(IDummyLogger.INFO, getClass(),"load() method bump. Generating file list from existed files...", null);
         _fileListMap = FileUtils.getFileListForEasyCheck(MainConfig.DOWNLOAD_PATH, MainConfig.DEPTH_OF_FILE_CHECK, true);
-        _nextPercentNumber = Math.max(0, ((_fileListMap.size() / 100) / 2));
+        _nextPercentNumber = Math.max(1, ((_fileListMap.size() / 100) / 2));
         IDummyLogger.log(IDummyLogger.FINE, getClass(), "File list generated!" + " " + "Loaded " + _fileListMap.size() + " files.", null);
         if (_executor != null)
         {
             ArrayList<String> pathAndNameKeys = new ArrayList<>(_linkGenerator.getFileMapHolder().keySet());
 
             int totalSize = pathAndNameKeys.size();
-            int partSize = totalSize / MainConfig.THREAD_COUNT_FOR_FILE_CHECK_IN_CONDITION;
-            int remainder = totalSize % MainConfig.THREAD_COUNT_FOR_FILE_CHECK_IN_CONDITION;
+            int partSize = totalSize / _threads.length;
+            int remainder = totalSize % _threads.length;
 
             int start = 0;
             int end   = partSize;
 
-            for (int index = 0; index < MainConfig.THREAD_COUNT_FOR_FILE_CHECK_IN_CONDITION; index++)
+            for (int index = 0; index < _threads.length; index++)
             {
                 int finalIndex = index;
                 int finalStart = start;
