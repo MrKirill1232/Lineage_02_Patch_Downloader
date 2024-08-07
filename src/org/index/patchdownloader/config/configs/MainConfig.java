@@ -23,11 +23,8 @@ public class MainConfig implements IConfig
     @ConfigParameter(parameterName = "downloading_path", canBeNull = true)
     public static File DOWNLOAD_PATH = null;
 
-    @ConfigParameter(parameterName = "developer")
-    public static boolean DEVELOPER = false;
-
     @ConfigParameter(parameterName = "thread_usage")
-    public static boolean THREAD_USAGE = true;
+    public static boolean THREAD_USAGE = false;
 
     @ConfigParameter(parameterName = "parallel_downloading")
     public static int PARALLEL_DOWNLOADING = 1;
@@ -120,19 +117,6 @@ public class MainConfig implements IConfig
         {
             UP_NOVA_LAUNCHER_PATCH_PATH = "PatchPath";
             info += "Upnova Patch Path is not setup. Variable " + "UP_NOVA_LAUNCHER_PATCH_PATH" + " updated. New value is \"" + UP_NOVA_LAUNCHER_PATCH_PATH.toString() + "\";" + "\n";
-        }
-        if (DEVELOPER)
-        {
-            PARALLEL_DOWNLOADING = 1;
-            info += "Developer option enabled. Variable " + "PARALLEL_DOWNLOADING" + " updated. New value is \"" + PARALLEL_DOWNLOADING + "\";" + "\n";
-            PARALLEL_DECODING = 1;
-            info += "Developer option enabled. Variable " + "PARALLEL_DECODING" + " updated. New value is \"" + PARALLEL_DECODING + "\";" + "\n";
-            PARALLEL_STORING = 1;
-            info += "Developer option enabled. Variable " + "PARALLEL_STORING" + " updated. New value is \"" + PARALLEL_STORING + "\";" + "\n";
-            CHECK_HASH_SUM = false;
-            info += "Developer option enabled. Variable " + "CHECK_HASH_SUM" + " updated. New value is \"" + CHECK_HASH_SUM + "\";" + "\n";
-            RESTORE_DOWNLOADING = false;
-            info += "Developer option enabled. Variable " + "RESTORE_DOWNLOADING" + " updated. New value is \"" + RESTORE_DOWNLOADING + "\";" + "\n";
         }
         System.out.print(info);
     }
