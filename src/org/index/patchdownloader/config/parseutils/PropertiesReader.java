@@ -36,6 +36,11 @@ public class PropertiesReader implements Closeable
 
     private void readLinesInFile()
     {
+        if (!_configFile.exists())
+        {
+            _readLines = null;
+            return;
+        }
         _readLines = new ArrayList<>();
         try (RandomAccessFile raf = new RandomAccessFile(_configFile, "r"))
         {

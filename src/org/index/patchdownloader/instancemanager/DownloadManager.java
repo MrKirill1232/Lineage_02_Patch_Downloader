@@ -12,6 +12,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 public class DownloadManager extends AbstractQueueManager implements IDummyLogger
 {
@@ -21,6 +23,8 @@ public class DownloadManager extends AbstractQueueManager implements IDummyLogge
     {
         return INSTANCE;
     }
+
+    private final static long TIMEOUT = TimeUnit.MINUTES.toMillis(1);
 
     private HttpClient[] _clients = null;
 
@@ -139,6 +143,7 @@ public class DownloadManager extends AbstractQueueManager implements IDummyLogge
     private static byte[] downloadImplByClient(LinkInfoHolder linkInfo, HttpClient client, String accessLink) throws IOException, InterruptedException
     {
         HttpRequest.Builder builder = HttpRequest.newBuilder();
+        builder.timeout(Duration.ofMillis(TIMEOUT));
         builder.uri(URI.create(accessLink));
         builder.GET();
         if (MainConfig.REQUESTED_USER_AGENT != null)

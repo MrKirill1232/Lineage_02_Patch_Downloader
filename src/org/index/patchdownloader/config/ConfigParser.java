@@ -162,7 +162,6 @@ public abstract class ConfigParser implements IConfigDummyLogger
                         null
                 );
             }
-            System.out.println(configKey + ": " + isValueAssigned);
         }
     }
 
