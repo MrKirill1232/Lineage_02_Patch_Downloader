@@ -14,7 +14,7 @@ public class MainConfig implements IConfig
     @ConfigParameter(ignoredParameter = true)
     public static File PATH_TO_RUNNING = null;
 
-    @ConfigParameter(parameterName = "cdn_source", setParameterMethod = "setCdnSource")
+    @ConfigParameter(parameterName = "cdn_source")
     public static CDNLink CDN_SOURCE = null;
 
     @ConfigParameter(parameterName = "patch_version")
@@ -119,18 +119,5 @@ public class MainConfig implements IConfig
             info += "Upnova Patch Path is not setup. Variable " + "UP_NOVA_LAUNCHER_PATCH_PATH" + " updated. New value is \"" + UP_NOVA_LAUNCHER_PATCH_PATH.toString() + "\";" + "\n";
         }
         System.out.print(info);
-    }
-
-    public static void setCdnSource(String value)
-    {
-        if (value == null)
-        {
-            CDN_SOURCE = null;
-            System.out.print("CDN Source is not setup. Variable " + "CDN_SOURCE" + " updated. New value is \"" + String.valueOf(CDN_SOURCE) + "\";" + "\n");
-        }
-        else
-        {
-            CDN_SOURCE = CDNLink.valueOf(value.toUpperCase());
-        }
     }
 }

@@ -1,10 +1,10 @@
-package org.index.patchdownloader.interfaces;
+package org.index.patchdownloader.config;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.Calendar;
 
-public interface IDummyLogger
+public interface IConfigDummyLogger
 {
     static boolean SUPPORTED_ANSI = true; // !System.getProperty("os.name", "Windows").contains("Windows");
 
