@@ -40,6 +40,7 @@ public abstract class ConfigParser implements IConfigDummyLogger
         _configFieldsHolder.clear();
         _fileReader.close();
         _fileReader = null;
+        configInstance.onLoad();
     }
 
     public void reload()
