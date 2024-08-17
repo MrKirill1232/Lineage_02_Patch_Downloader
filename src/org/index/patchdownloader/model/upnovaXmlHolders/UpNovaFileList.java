@@ -67,8 +67,15 @@ public class UpNovaFileList implements IXmlParser
                 String path = fileModelSet.getString("Path", null).replaceAll("\\\\", "/");;
                 String size = fileModelSet.getString("Size", null);
                 String hash = fileModelSet.getString("Hash", null);
-
-                FileInfoHolder fileInfoHolder = new FileInfoHolder(name, path.substring(_initialName.length() + 1), ArchiveType.ZIP_ARCHIVE, false, 0);
+                FileInfoHolder fileInfoHolder;
+                if (path.equalsIgnoreCase(_initialName))
+                {   // in head of project
+                    fileInfoHolder = new FileInfoHolder(name, "", ArchiveType.ZIP_ARCHIVE, false, 0);
+                }
+                else
+                {   // in sub-folder
+                    fileInfoHolder = new FileInfoHolder(name, path.substring(_initialName.length() + 1), ArchiveType.ZIP_ARCHIVE, false, 0);
+                }
                 fileInfoHolder.setFileLength(Integer.parseInt(size));
                 fileInfoHolder.setFileHashSum(hash);
 
