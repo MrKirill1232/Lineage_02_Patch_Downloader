@@ -5,6 +5,7 @@ import org.index.patchdownloader.enums.ArchiveType;
 import org.index.patchdownloader.enums.CDNLink;
 import org.index.patchdownloader.enums.HashType;
 import org.index.patchdownloader.instancemanager.DownloadManager;
+import org.index.patchdownloader.interfaces.IDummyLogger;
 import org.index.patchdownloader.model.holders.FileInfoHolder;
 import org.index.patchdownloader.model.holders.LinkInfoHolder;
 import org.index.patchdownloader.model.requests.DownloadRequest;
@@ -65,6 +66,11 @@ public class NovaLauncherGenerator extends GeneralLinkGenerator
         //------------------------------------------------------------------------------------------------------//
         httpClient.close();
         //------------------------------------------------------------------------------------------------------//
+        if (updateConfigInfo.getAccessLink().getHttpStatus() != 200)
+        {
+            IDummyLogger.log(IDummyLogger.ERROR, "Cannot get info from 'UpdateConfig.xml'. Response - '" + updateConfigInfo.getAccessLink().getHttpStatus() + "'. Request URL - '" + updateConfigUrl + "'");
+            return;
+        }
         UpNovaUpdateConfig upNovaUpdateConfig = new UpNovaUpdateConfig();
         upNovaUpdateConfig.parseXmlString(updateConfigInfo.getAccessLink().getAccessLink(), new String(updateConfigRequest.getDownloadedByteArray()[0]));
         _upNovaUpdateConfig = upNovaUpdateConfig;
