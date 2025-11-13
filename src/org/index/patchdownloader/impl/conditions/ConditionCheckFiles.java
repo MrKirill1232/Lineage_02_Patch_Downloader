@@ -148,35 +148,48 @@ public class ConditionCheckFiles implements IDummyLogger, ILoadable, ICondition,
 
     private void checkFiles(int threadId, Collection<String> lookingFiles)
     {
+        String lastPathAndName = null;
+
         IHashingAlgorithm hashingAlgorithm = HashingManager.getAvailableHashingAlgorithm(_linkGenerator.getHashingAlgorithm(), true);
-        for (String pathAndName : lookingFiles)
+        try
         {
-            File existedFile = _fileListMap.getOrDefault(pathAndName, null);
-            if (existedFile != null && existedFile.exists())
+            for (String pathAndName : lookingFiles)
             {
-                FileInfoHolder fileInfoHolder = _linkGenerator.getFileMapHolder().getOrDefault(pathAndName, null);
+                lastPathAndName = pathAndName;
+                File existedFile = _fileListMap.getOrDefault(pathAndName, null);
+                if (existedFile != null && existedFile.exists())
+                {
+                    FileInfoHolder fileInfoHolder = _linkGenerator.getFileMapHolder().getOrDefault(pathAndName, null);
 
-                boolean checkBySize = !MainConfig.CHECK_BY_SIZE;
-                boolean checkByHash = !MainConfig.CHECK_BY_HASH_SUM;
+                    boolean checkBySize = !MainConfig.CHECK_BY_SIZE;
+                    boolean checkByHash = !MainConfig.CHECK_BY_HASH_SUM;
 
-                if (MainConfig.CHECK_BY_SIZE)
-                {
-                    checkBySize = fileInfoHolder.getFileLength() == ((int) existedFile.length());
+                    if (MainConfig.CHECK_BY_SIZE)
+                    {
+                        checkBySize = fileInfoHolder.getFileLength() == ((int) existedFile.length());
+                    }
+                    if (MainConfig.CHECK_BY_HASH_SUM)
+                    {
+                        checkByHash = fileInfoHolder.getFileHashSum() != null && fileInfoHolder.getFileHashSum().equals(hashingAlgorithm.calculateHash(existedFile));
+                    }
+                    if (checkBySize && checkByHash)
+                    {
+                        _excludeFileList.add(pathAndName);
+                    }
                 }
-                if (MainConfig.CHECK_BY_HASH_SUM)
+                if ((_simpleCounter.incrementAndGet() % _nextPercentNumber == 0) && MainConfig.LOGGING_FILE_CHECK_IN_CONDITION)
                 {
-                    checkByHash = fileInfoHolder.getFileHashSum().equals(hashingAlgorithm.calculateHash(existedFile));
+                    logProgress();
                 }
-                if (checkBySize && checkByHash)
-                {
-                    _excludeFileList.add(pathAndName);
-                }
-            }
-            if ((_simpleCounter.incrementAndGet() % _nextPercentNumber == 0) && MainConfig.LOGGING_FILE_CHECK_IN_CONDITION)
-            {
-                logProgress();
             }
         }
-        onThreadCompleteTask(threadId);
+        catch (Exception e)
+        {
+            IDummyLogger.log(IDummyLogger.ERROR, getClass(), "Error while parsing file " + ("'" + lastPathAndName + "'") + ".", e);
+        }
+        finally
+        {
+            onThreadCompleteTask(threadId);
+        }
     }
 }
