@@ -21,21 +21,11 @@ public class CompareBothSystems
         Map<String, File> mapOfFirstSystem  = getPatchLikeMapOfFiles(pathToFirstSystem  , filesOfFSystem);
         Map<String, File> mapOfSecondSystem = getPatchLikeMapOfFiles(pathToSecondSystem , filesOfSSystem);
 
-        Map<String, File> comparing01;
-        Map<String, File> comparing02;
-        if (mapOfFirstSystem.size() >= mapOfSecondSystem.size())
-        {
-            comparing01 = mapOfFirstSystem  ;
-            comparing01 = mapOfSecondSystem ;
-        }
-        else
-        {
-            comparing01 = mapOfSecondSystem ;
-            comparing01 = mapOfFirstSystem  ;
-        }
+        Set<String> allKeys = new HashSet<>(mapOfFirstSystem.keySet());
+        allKeys.addAll(mapOfSecondSystem.keySet());
         // reason , patchKey
         Map<String, Set<String>> notComparedFiles = new HashMap<>();
-        for (String patchKey : comparing01.keySet())
+        for (String patchKey : allKeys)
         {
             File fileOfFsystem = mapOfFirstSystem   .getOrDefault(patchKey, null);
             File fileOfSsystem = mapOfSecondSystem  .getOrDefault(patchKey, null);
@@ -85,7 +75,14 @@ public class CompareBothSystems
     private static String getHashSum(HashType hashType, File file)
     {
         IHashingAlgorithm hashingAlgorithm = HashingManager.getAvailableHashingAlgorithm(hashType, false);
-        return hashingAlgorithm == null ? "" : hashingAlgorithm.calculateHash(file);
+        if (hashingAlgorithm == null)
+        {
+            return "";
+        }
+        // calculateHash(File) may return null on a read failure (per the IHashingAlgorithm contract); an
+        // unreadable file has no comparable hash, so treat it as an empty string.
+        String hash = hashingAlgorithm.calculateHash(file);
+        return hash == null ? "" : hash;
     }
 
     public static void main(String[] args)

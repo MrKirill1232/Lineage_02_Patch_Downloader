@@ -4,6 +4,7 @@ import org.index.patchdownloader.config.configs.MainConfig;
 import org.index.patchdownloader.model.holders.FileInfoHolder;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -12,6 +13,33 @@ import java.util.List;
 public class FileUtils
 {
     public static final File[] EMPTY_FILE_ARRAY = new File[0];
+
+    /**
+     * EN: Defence-in-depth against path traversal (zip-slip): fails when the canonical {@code target} escapes
+     *     {@code baseDir}. File lists come from untrusted sources (a crafted torrent from a mirror, a
+     *     Content-Delivery-Network (CDN) file list) and their paths flow into {@code new File(baseDir, relativePath)};
+     *     a {@code ..} or absolute path would otherwise write/read an arbitrary file on disk. Used by both the store
+     *     stage and source-compare copy. <br>
+     * RU: Эшелонированная защита от обхода пути (zip-slip): падает, если канонический {@code target} выходит за
+     *     {@code baseDir}. Списки файлов приходят из недоверенных источников (поддельный торрент с зеркала,
+     *     список файлов из сети доставки контента (CDN)), а их пути попадают в {@code new File(baseDir, relativePath)};
+     *     без проверки {@code ..} или абсолютный путь записал бы или прочитал произвольный файл на диске. Применяется
+     *     и стадией сохранения, и копированием source-compare. <br>
+     * ==================================================================<br>
+     * EN: @param baseDir the directory the target must stay within / RU: @param baseDir каталог, за который цель не должна выходить <br>
+     * EN: @param target the resolved target file / RU: @param target вычисленный целевой файл <br>
+     * EN: @param label the file's link path (for the message) / RU: @param label путь-ссылка файла (для сообщения) <br>
+     **/
+    public static void ensureWithinDirectory(File baseDir, File target, String label) throws IOException
+    {
+        String canonicalBase = baseDir.getCanonicalPath();
+        String canonicalTarget = target.getCanonicalPath();
+        String prefix = canonicalBase.endsWith(File.separator) ? canonicalBase : canonicalBase + File.separator;
+        if (!canonicalTarget.equals(canonicalBase) && !canonicalTarget.startsWith(prefix))
+        {
+            throw new IOException("Refusing to use '" + label + "' outside '" + canonicalBase + "' (resolves to '" + canonicalTarget + "').");
+        }
+    }
 
     public static File[] getFileList(File path, int depth)
     {
@@ -69,11 +97,12 @@ public class FileUtils
             pathToDownload = pathToFile.getAbsolutePath();
         }
         String pathToCurrFile = file.getAbsolutePath();
+        int offset = pathToDownload.endsWith(File.separator) ? pathToDownload.length() : pathToDownload.length() + 1;
         if (lowerCase)
         {
-            return pathToCurrFile.substring(pathToDownload.length() + 1).replaceAll("\\\\", "/").toLowerCase();
+            return pathToCurrFile.substring(offset).replaceAll("\\\\", "/").toLowerCase();
         }
-        return pathToCurrFile.substring(pathToDownload.length() + 1).replaceAll("\\\\", "/");
+        return pathToCurrFile.substring(offset).replaceAll("\\\\", "/");
     }
 
 
@@ -83,25 +112,20 @@ public class FileUtils
         {
             return false;
         }
+        File targetDir = new File(originalFolder, fileInfoHolder.getFilePath());
+        try
+        {
+            ensureWithinDirectory(originalFolder, targetDir, fileInfoHolder.getLinkPath());
+        }
+        catch (IOException e)
+        {
+            return false;
+        }
         if (new File(originalFolder, (fileInfoHolder.getLinkPath())).exists())
         {
             return true;
         }
-        String[] splitPath = fileInfoHolder.getFilePath().split("/");
-        File checkCreation = originalFolder;
-        for (String path : splitPath)
-        {
-            checkCreation = new File(checkCreation, ("/" + path));
-            if (checkCreation.exists())
-            {
-                continue;
-            }
-            if (!checkCreation.mkdir())
-            {
-                return false;
-            }
-        }
-        return true;
+        return targetDir.exists() || targetDir.mkdirs();
     }
 
     public static boolean canGetAccessToFolder(File saveFolder)

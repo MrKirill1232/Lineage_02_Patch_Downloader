@@ -15,6 +15,10 @@ public enum CDNLink
     // [Request URI: http://d35293xeakkyq4.cloudfront.net/LINEAGE2/479/Patch/PatchFileInfo_LINEAGE2_479.dat.zip]
     NC_SOFT_AMERICA("http://d35293xeakkyq4.cloudfront.net/LINEAGE2/%d/Patch/%s", "http://d35293xeakkyq4.cloudfront.net/LINEAGE2/%d/Patch/PatchFileInfo_LINEAGE2_%d.dat"),
 
+    // Akumu HTTP mirror: the file list comes from a .torrent under the configured folder (not a format string);
+    // links are built as folder + relative path. See AkumuLinkGenerator / AnubisClient.
+    AKUMU(null, null),
+
     UP_NOVA_LAUNCHER(null, null);
     ;
 

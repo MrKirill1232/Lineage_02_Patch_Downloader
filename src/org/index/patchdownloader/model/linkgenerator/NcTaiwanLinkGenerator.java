@@ -4,15 +4,15 @@ import org.index.patchdownloader.enums.ArchiveType;
 import org.index.patchdownloader.enums.CDNLink;
 import org.index.patchdownloader.enums.FileTypeByLink;
 import org.index.patchdownloader.enums.HashType;
+import org.index.patchdownloader.interfaces.IDummyLogger;
 import org.index.patchdownloader.model.holders.FileInfoHolder;
 import org.index.patchdownloader.model.holders.LinkInfoHolder;
-import org.index.patchdownloader.model.requests.DownloadRequest;
-import org.index.patchdownloader.instancemanager.DownloadManager;
+import org.index.patchdownloader.util.HttpDownloadUtils;
 
-import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
 {
@@ -32,14 +32,15 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
         return HashType.SHA01;
     }
 
+    /**
+     * EN: Downloads the file list and the hash list (synchronously) and parses them into the file map.
+     *     A non-200 HTTP status aborts the run instead of silently leaving the map empty or unverified. <br>
+     * RU: Скачивает (синхронно) список файлов и список хешей и разбирает их в карту файлов. HTTP-статус,
+     *     отличный от 200, прерывает загрузку, а не оставляет карту пустой или без проверки хешей. <br>
+     **/
     @Override
     public void load()
     {
-        HttpClient httpClient;
-        //------------------------------------------------------------------------------------------------------//
-        httpClient = HttpClient.newHttpClient();
-        //------------------------------------------------------------------------------------------------------//
-
         String fileListUrl = String.format(_cdnLinkType.getCdnFileListLink(), _patchVersion, _patchVersion);
 
         FileInfoHolder fileListInfo = new FileInfoHolder(getFileListFileName(), "", ArchiveType.NONE, false, 0);
@@ -47,17 +48,12 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
         fileListInfo.setAccessLink(new LinkInfoHolder(fileListInfo));
         fileListInfo.getAccessLink().setAccessLink(fileListUrl);
 
-        DownloadRequest fileListRequest = DownloadManager.download(httpClient, new DownloadRequest(null, fileListInfo));
-
-        //------------------------------------------------------------------------------------------------------//
-        httpClient.close();
-        //------------------------------------------------------------------------------------------------------//
-
-        parseFileList(fileListRequest);
-
-        //------------------------------------------------------------------------------------------------------//
-        httpClient = HttpClient.newHttpClient();
-        //------------------------------------------------------------------------------------------------------//
+        byte[] fileListData = HttpDownloadUtils.download(fileListInfo.getAccessLink());
+        if (fileListInfo.getAccessLink().getHttpStatus() != 200)
+        {
+            throw new NoSuchElementException("File list is unavailable! HTTP status " + fileListInfo.getAccessLink().getHttpStatus() + ". Requested link " + fileListUrl + ";");
+        }
+        parseFileList(fileListData);
 
         String fileMapUrl = String.format(_cdnLinkType.getGeneralCdnLink(), _patchVersion, getFileListFileHash());
 
@@ -66,13 +62,13 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
         fileMapInfo.setAccessLink(new LinkInfoHolder(fileMapInfo));
         fileMapInfo.getAccessLink().setAccessLink(fileMapUrl);
 
-        DownloadRequest fileMapRequest = DownloadManager.download(httpClient, new DownloadRequest(null, fileMapInfo));
-
-        //------------------------------------------------------------------------------------------------------//
-        httpClient.close();
-        //------------------------------------------------------------------------------------------------------//
-
-        parseHashList(fileMapRequest);
+        byte[] fileMapData = HttpDownloadUtils.download(fileMapInfo.getAccessLink());
+        if (fileMapInfo.getAccessLink().getHttpStatus() != 200)
+        {
+            IDummyLogger.log(IDummyLogger.ERROR, "Hash list is unavailable! HTTP status " + fileMapInfo.getAccessLink().getHttpStatus() + ". Requested link " + fileMapUrl + ";");
+            throw new NoSuchElementException("Hash list is unavailable! HTTP status " + fileMapInfo.getAccessLink().getHttpStatus() + ". Requested link " + fileMapUrl + ";");
+        }
+        parseHashList(fileMapData);
     }
 
     protected String getFileListFileName()
@@ -85,13 +81,21 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
         return "FileInfoMap_TWLin2EP20_" + _patchVersion + ".dat";
     }
 
-    protected void parseFileList(DownloadRequest request)
+    /**
+     * EN: Parses the UTF-16LE file-list text into per-file holders (path/size/hash/type), grouping
+     *     separated parts. <br>
+     * RU: Разбирает UTF-16LE текст списка файлов в holder'ы по файлам (путь/размер/хеш/тип), группируя
+     *     разделённые части. <br>
+     * ==================================================================<br>
+     * EN: @param data the downloaded file-list bytes / RU: @param data скачанные байты списка файлов <br>
+     **/
+    protected void parseFileList(byte[] data)
     {
-        if (request == null || !request.isComplete())
+        if (data == null || data.length == 0)
         {
             return;
         }
-        String fileInfo = new String(request.getDownloadedByteArray()[0], StandardCharsets.UTF_16LE);
+        String fileInfo = new String(data, StandardCharsets.UTF_16LE);
         String[] lines = fileInfo.split("\r\n");
         Map<String, String> stringMapOfValues = new HashMap<>();
         for (String line : lines)
@@ -104,12 +108,14 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
         {
             String  pathAndName = line.split(":", 2)[0];
             int     typeOfFile  = Integer.parseInt(line.substring(line.length() - 1));
-            boolean isSeparated = (typeOfFile == FileTypeByLink.SEPARATED.ordinal() || typeOfFile == FileTypeByLink.UNK_04.ordinal()) && Character.isDigit(pathAndName.charAt(pathAndName.length() - 1));
-            String  nameOfPart  = isSeparated ? pathAndName.substring(0, pathAndName.length() - 2) + "%02d" : pathAndName;
+            boolean typeAllowsSeparation = (typeOfFile == FileTypeByLink.SEPARATED.ordinal() || typeOfFile == FileTypeByLink.UNK_04.ordinal());
+            int     digitRunLength = trailingDigitRunLength(pathAndName);
+            boolean isSeparated = typeAllowsSeparation && digitRunLength >= 2;
+            String  nameOfPart  = isSeparated ? pathAndName.substring(0, pathAndName.length() - digitRunLength) + "%02d" : pathAndName;
             int     countOfSeparatedFiles;
             if (isSeparated)
             {
-                int part = Integer.parseInt(pathAndName.substring(pathAndName.length() - 2));
+                int part = Integer.parseInt(pathAndName.substring(pathAndName.length() - digitRunLength));
                 if (part > 1)
                 {
                     continue;
@@ -122,9 +128,9 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
             }
 
             FileInfoHolder fileInfoHolder = parseFileInfoFromLine(line, true, false, countOfSeparatedFiles);
-            if (countOfSeparatedFiles > 1)
+            if (countOfSeparatedFiles > 0)
             {
-                // separate index :D
+                // Fill each split part by its 1-based index (%02d) by looking the part line up in the map
                 for (int sIndex = 0; sIndex < countOfSeparatedFiles; sIndex++)
                 {
                     String lookingInfo = stringMapOfValues.get(String.format(nameOfPart, (sIndex + 1)));
@@ -133,6 +139,16 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
             }
             _fileMapHolder.put((fileInfoHolder.getLinkPath()).toLowerCase(), fileInfoHolder);
         }
+    }
+
+    private static int trailingDigitRunLength(String value)
+    {
+        int index = value.length();
+        while (index > 0 && Character.isDigit(value.charAt(index - 1)))
+        {
+            index--;
+        }
+        return value.length() - index;
     }
 
     private static int getCountOfSeparatedFiles(Map<String, String> stringMapOfValues, String nameOfPart)
@@ -175,14 +191,22 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
         return fileInfoHolder;
     }
 
-    protected void parseHashList(DownloadRequest request)
+    /**
+     * EN: Parses the UTF-16LE hash-list text and fills the final (decompressed) length + hash-sum on the
+     *     already-parsed file holders. <br>
+     * RU: Разбирает UTF-16LE текст списка хешей и заполняет финальную (распакованную) длину + хеш-сумму на
+     *     уже разобранных holder'ах файлов. <br>
+     * ==================================================================<br>
+     * EN: @param data the downloaded hash-list bytes / RU: @param data скачанные байты списка хешей <br>
+     **/
+    protected void parseHashList(byte[] data)
     {
-        if (request == null || !request.isComplete())
+        if (data == null || data.length == 0)
         {
             return;
         }
 
-        String hashInfo = new String(request.getDownloadedByteArray()[0], StandardCharsets.UTF_16LE);
+        String hashInfo = new String(data, StandardCharsets.UTF_16LE);
         String[] lines = hashInfo.split("\r\n");
 
         for (String line : lines)

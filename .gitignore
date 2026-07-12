@@ -27,3 +27,7 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+### Downloader output (do NOT commit — multi-GB client downloads) ###
+output/
+output_ref/
+output_akumu/

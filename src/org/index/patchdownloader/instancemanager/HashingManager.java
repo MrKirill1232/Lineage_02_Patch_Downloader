@@ -20,10 +20,25 @@ public class HashingManager
 
     }
 
+    /**
+     * EN: Checks the given bytes against an expected checksum using a FRESH algorithm instance, so the
+     *     call is thread-safe on the concurrent decompress/condition paths (no shared stateful digest). <br>
+     * RU: Проверяет данные по ожидаемой контрольной сумме, используя СВЕЖИЙ экземпляр алгоритма, поэтому
+     *     вызов потокобезопасен на параллельных путях decompress/condition (без общего stateful-дайджеста). <br>
+     * ==================================================================<br>
+     * EN: @param hashType the hash algorithm / RU: @param hashType алгоритм хеша <br>
+     * EN: @param inputArray the bytes to hash / RU: @param inputArray байты для хеширования <br>
+     * EN: @param checksum the expected checksum / RU: @param checksum ожидаемая контрольная сумма <br>
+     * @return <br>
+     *         {true}  - EN: hash matches / RU: хеш совпадает <br>
+     *         {false} - EN: mismatch or unknown algorithm / RU: несовпадение или неизвестный алгоритм <br>
+     **/
     public static boolean check(HashType hashType, byte[] inputArray, String checksum)
     {
-        IHashingAlgorithm hashingAlgorithm = getAvailableHashingAlgorithm(hashType, false);
-        return hashingAlgorithm != null && hashingAlgorithm.calculateHash(inputArray).equals(checksum);
+        IHashingAlgorithm hashingAlgorithm = getAvailableHashingAlgorithm(hashType, true);
+        // Case-insensitive: computed hashes are lower-case hex, but the expected checksum comes from an external
+        // file list (CDN / UpNova) that may use upper-case — a case-only difference is NOT a real mismatch.
+        return hashingAlgorithm != null && hashingAlgorithm.calculateHash(inputArray).equalsIgnoreCase(checksum);
     }
 
     public static IHashingAlgorithm getAvailableHashingAlgorithm(HashType hashType, boolean newInstance)

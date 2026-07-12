@@ -6,7 +6,24 @@ import java.util.Calendar;
 
 public interface IConfigDummyLogger
 {
-    static boolean SUPPORTED_ANSI = true; // !System.getProperty("os.name", "Windows").contains("Windows");
+    boolean SUPPORTED_ANSI = detectAnsiSupport();
+
+    static boolean detectAnsiSupport()
+    {
+        // No attached console (e.g. stdout redirected to a file / pipe): never emit
+        // ANSI escapes, otherwise log files get polluted with literal color bytes.
+        if (System.console() == null)
+        {
+            return false;
+        }
+        // Modern terminals advertise themselves: Windows Terminal sets WT_SESSION,
+        // most *nix terminals set TERM. Anything non-Windows generally handles ANSI.
+        if (System.getenv("WT_SESSION") != null || System.getenv("TERM") != null)
+        {
+            return true;
+        }
+        return !System.getProperty("os.name", "Windows").contains("Windows");
+    }
 
     public static String INFO = "INFO";
     public static String WARNING = "WARN";

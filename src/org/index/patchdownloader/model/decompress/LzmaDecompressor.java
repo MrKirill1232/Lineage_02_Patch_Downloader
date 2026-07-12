@@ -1,44 +1,57 @@
 package org.index.patchdownloader.model.decompress;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+
 import org.index.patchdownloader.interfaces.IDecompressor;
 import org.index.patchdownloader.interfaces.IDummyLogger;
-import org.index.patchdownloader.model.requests.DownloadRequest;
 import org.tukaani.xz.LZMAInputStream;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-
-public class LzmaDecompressor implements IDummyLogger, IDecompressor
+/**
+ * EN: LZMA (Lempel-Ziv-Markov chain Algorithm) codec. Reads the whole stream into a growable
+ *     buffer, so the returned array is exact length (fixes the old trailing-zero backing-array
+ *     bug). Fails loudly (throws) instead of returning empty data. Stateless.<br>
+ * RU: Кодек LZMA (Lempel-Ziv-Markov chain Algorithm). Читает весь поток в растущий буфер, поэтому
+ *     возвращаемый массив имеет точную длину (исправляет старую ошибку с лишними нулями в конце
+ *     базового массива (backing array)). При ошибке сразу выбрасывает исключение, а не возвращает
+ *     пустой массив. Без состояния.<br>
+ **/
+public class LzmaDecompressor implements IDecompressor
 {
+    private static final int MIN_HEADER_LENGTH = 13;
+    private static final int MAX_INITIAL_BUFFER = 32 * 1024 * 1024;
 
+    /**
+     * EN: Decompresses an LZMA stream into an exact-length array using a growable output buffer. <br>
+     * RU: Распаковывает LZMA-поток в массив точной длины с помощью растущего буфера. <br>
+     * ==================================================================<br>
+     * EN: @param compressData the LZMA bytes / RU: @param compressData байты LZMA <br>
+     * @return <br>
+     *         {byte[]} - EN: exact-length decompressed bytes / RU: распакованные байты точной длины <br>
+     **/
     @Override
-    public byte[] decompress(DownloadRequest request, int totalArrayLength, byte[] compressDataArray)
+    public byte[] decompress(byte[] compressData) throws IOException
     {
-        try
+        int sizeHint = getUnCompressSize(compressData);
+        if (sizeHint <= 0 || sizeHint == Integer.MAX_VALUE)
         {
-            LZMAInputStream archiveStream = new LZMAInputStream(new ByteArrayInputStream(compressDataArray));
-
-            ByteBuffer decodeBuffer = ByteBuffer.allocate(getUnCompressSize(compressDataArray));
-
-            while (true)
+            sizeHint = Math.max(compressData.length * 2, 1024);
+        }
+        // Cap the initial buffer so a corrupt/oversized header size cannot trigger a huge upfront
+        // allocation; the growable stream still expands as needed for genuinely large files.
+        sizeHint = Math.min(sizeHint, MAX_INITIAL_BUFFER);
+        try (LZMAInputStream archiveStream = new LZMAInputStream(new ByteArrayInputStream(compressData));
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream(sizeHint))
+        {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = archiveStream.read(buffer)) != -1)
             {
-                byte[] bytes = new byte[1024];
-                int status = archiveStream.read(bytes);
-                if (status == -1)
-                {
-                    break;
-                }
-                decodeBuffer.put(bytes, 0, status);
+                outputStream.write(buffer, 0, read);
             }
-
-            return decodeBuffer.array();
+            return outputStream.toByteArray();
         }
-        catch (IOException ioException)
-        {
-            ioException.printStackTrace();
-        }
-        return new byte[0];
     }
 
     private static int getPropertiesByte(byte[] input)
@@ -48,7 +61,6 @@ public class LzmaDecompressor implements IDummyLogger, IDecompressor
 
     private static int getDictionarySize(byte[] input)
     {
-        // readByte;        // Properties byte (lc, lp, and pb)
         int dictSize = 0;
         for (int index = 0; index < 4; ++index)
         {
@@ -57,45 +69,43 @@ public class LzmaDecompressor implements IDummyLogger, IDecompressor
         return dictSize;
     }
 
+    /**
+     * EN: Validates the LZMA header (properties byte, dictionary size, uncompressed size) and that
+     *     the data is not already the final uncompressed content. <br>
+     * RU: Проверяет заголовок LZMA (байт свойств, размер словаря, распакованный размер) и что данные
+     *     не являются уже финальным распакованным содержимым. <br>
+     * ==================================================================<br>
+     * EN: @param compressData the candidate bytes / RU: @param compressData байты-кандидат <br>
+     * EN: @param expectedFinalLength expected uncompressed length or -1 / RU: @param expectedFinalLength ожидаемая распакованная длина или -1 <br>
+     * @return <br>
+     *         {true}  - EN: valid LZMA, decode it / RU: корректный LZMA, распаковать <br>
+     *         {false} - EN: not decodable LZMA / RU: не декодируемый LZMA <br>
+     **/
     @Override
-    public boolean check(DownloadRequest request, int totalArrayLength, byte[] compressDataArray)
+    public boolean check(byte[] compressData, int expectedFinalLength)
     {
-        if (request.getFileInfoHolder().getFileLength() == totalArrayLength)
+        if (compressData.length < MIN_HEADER_LENGTH)
         {
             return false;
         }
-
-        if (getPropertiesByte(compressDataArray) > (4 * 5 + 4) * 9 + 8)
+        if (expectedFinalLength > 0 && expectedFinalLength == compressData.length)
         {
-            // look implementation on org/tukaani/xz/LZMAInputStream.initialize
-            // int props = propsByte & 0xFF;
-            // if (props > (4 * 5 + 4) * 9 + 8)
-            //   throw new CorruptedInputException("Invalid LZMA properties byte");
-            IDummyLogger.log(IDummyLogger.ERROR, getClass(), "Cannot decode input array by LZMA method. Reason: " + "Properties byte is invalid. File '" + request.getLinkPath() + "';", null);
             return false;
         }
-        if (true)
+        if (getPropertiesByte(compressData) > (4 * 5 + 4) * 9 + 8)
         {
-            int dictionarySize = getDictionarySize(compressDataArray);
-            // look implementation on org/tukaani/xz/LZMAInputStream.initialize
-            // Validate the dictionary size since the other "initialize" throws
-            // IllegalArgumentException if dictSize is not supported.
-            if (dictionarySize < 0 || dictionarySize > LZMAInputStream.DICT_SIZE_MAX)
-            {
-                IDummyLogger.log(IDummyLogger.ERROR, getClass(), "Cannot decode input array by LZMA method. Reason: " + "LZMA dictionary is too big for this implementation. File '" + request.getLinkPath() + "';", null);
-                return false;
-            }
+            IDummyLogger.log(IDummyLogger.ERROR, "Cannot decode LZMA: invalid properties byte.");
+            return false;
         }
-
-        int allocateBufferSize = getUnCompressSize(compressDataArray);
-        if (allocateBufferSize <= 0 || allocateBufferSize == Integer.MAX_VALUE)
+        int dictionarySize = getDictionarySize(compressData);
+        if (dictionarySize < 0 || dictionarySize > LZMAInputStream.DICT_SIZE_MAX)
         {
-            if (request.getDownloadedByteArray().length > 1)
-            {
-                IDummyLogger.log(IDummyLogger.ERROR, getClass(), "Cannot decode input array by LZMA method. Reason: " + "Uncompressed length is not correct! Next size found: " + allocateBufferSize + ". File '" + request.getLinkPath() + "';", null);
-                return false;
-            }
-            // System.out.println("Cannot decode input array by LZMA method. Reason: " + "File is not a archive. File '" + request.getLinkPath() + "';");
+            IDummyLogger.log(IDummyLogger.ERROR, "Cannot decode LZMA: dictionary is too big for this implementation.");
+            return false;
+        }
+        int uncompressedSize = getUnCompressSize(compressData);
+        if (uncompressedSize <= 0 || uncompressedSize == Integer.MAX_VALUE)
+        {
             return false;
         }
         return true;
@@ -107,14 +117,19 @@ public class LzmaDecompressor implements IDummyLogger, IDecompressor
         return compressedDataArray.length;
     }
 
+    /**
+     * EN: Reads the 64-bit little-endian uncompressed-size field at offset 5 of the LZMA header,
+     *     clamped to {@code int}. <br>
+     * RU: Читает 64-битное little-endian поле распакованного размера по смещению 5 заголовка LZMA,
+     *     ограниченное {@code int}. <br>
+     * ==================================================================<br>
+     * EN: @param compressedDataArray the LZMA bytes / RU: @param compressedDataArray байты LZMA <br>
+     * @return <br>
+     *         {int} - EN: uncompressed size (clamped) / RU: распакованный размер (ограниченный) <br>
+     **/
     @Override
     public int getUnCompressSize(byte[] compressedDataArray)
     {
-        // readByte;        // Properties byte (lc, lp, and pb)
-        // readUnsignedByte // Dictionary size is an unsigned 32-bit little endian integer.
-        // readUnsignedByte // Dictionary size is an unsigned 32-bit little endian integer.
-        // readUnsignedByte // Dictionary size is an unsigned 32-bit little endian integer.
-        // readUnsignedByte // Dictionary size is an unsigned 32-bit little endian integer.
         long uncompSize = 0;
         for (int index = 0; index < 8; ++index)
         {

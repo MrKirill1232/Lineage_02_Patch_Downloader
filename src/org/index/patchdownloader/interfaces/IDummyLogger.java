@@ -6,7 +6,26 @@ import java.util.Calendar;
 
 public interface IDummyLogger
 {
-    static boolean SUPPORTED_ANSI = true; // !System.getProperty("os.name", "Windows").contains("Windows");
+    static boolean SUPPORTED_ANSI = detectAnsiSupport();
+
+    private static boolean detectAnsiSupport()
+    {
+        // Only emit ANSI escape codes when a real terminal is attached and virtual-terminal
+        // processing is plausibly available. Java never calls SetConsoleMode(ENABLE_VIRTUAL_TERMINAL_PROCESSING),
+        // so on the legacy Windows console (cmd.exe / conhost) raw escape sequences would render as garbage
+        // and pollute redirected log files. Enable colors on non-Windows, or on Windows only inside terminals
+        // that are known to support VT sequences (Windows Terminal, ANSICON).
+        if (System.console() == null)
+        {
+            return false;
+        }
+        boolean isWindows = System.getProperty("os.name", "").contains("Windows");
+        if (!isWindows)
+        {
+            return true;
+        }
+        return System.getenv("WT_SESSION") != null || System.getenv("ANSICON") != null;
+    }
 
     public static String INFO = "INFO";
     public static String WARNING = "WARN";

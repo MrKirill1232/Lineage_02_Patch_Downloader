@@ -1,87 +1,103 @@
 package org.index.patchdownloader.model.decompress;
 
-import org.index.patchdownloader.interfaces.IDecompressor;
-import org.index.patchdownloader.interfaces.IDummyLogger;
-import org.index.patchdownloader.model.requests.DownloadRequest;
-
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-public class ZipDecompressor implements IDummyLogger, IDecompressor
+import org.index.patchdownloader.interfaces.IDecompressor;
+import org.index.patchdownloader.interfaces.IDummyLogger;
+
+/**
+ * EN: ZIP codec. Reads the first entry into a growable buffer (exact-length output, tolerant of an
+ *     unknown declared size). Fails loudly (throws) instead of returning empty data. Stateless.<br>
+ * RU: Кодек ZIP. Читает первую запись в растущий буфер (вывод точной длины, устойчив к неизвестному
+ *     объявленному размеру). При ошибке сразу выбрасывает исключение, а не возвращает пустой массив.
+ *     Без состояния.<br>
+ **/
+public class ZipDecompressor implements IDecompressor
 {
+    private static final int LOCAL_HEADER_MIN_LENGTH = 30;
+    private static final int MAX_INITIAL_BUFFER = 32 * 1024 * 1024;
 
+    /**
+     * EN: Decompresses the first ZIP entry into an exact-length array; warns if the archive has more
+     *     than one entry (only the first is used). <br>
+     * RU: Распаковывает первую запись ZIP в массив точной длины; предупреждает, если в архиве более
+     *     одной записи (используется только первая). <br>
+     * ==================================================================<br>
+     * EN: @param compressData the ZIP bytes / RU: @param compressData байты ZIP <br>
+     * @return <br>
+     *         {byte[]} - EN: exact-length decompressed bytes / RU: распакованные байты точной длины <br>
+     **/
     @Override
-    public byte[] decompress(DownloadRequest request, int totalArrayLength, byte[] compressDataArray)
+    public byte[] decompress(byte[] compressData) throws IOException
     {
-        try
+        try (ZipInputStream zipInputStream = new ZipInputStream(new ByteArrayInputStream(compressData)))
         {
-            ZipInputStream zipInputStream = new ZipInputStream(new ByteArrayInputStream(compressDataArray));
             ZipEntry zipEntry = zipInputStream.getNextEntry();
-            ByteBuffer decodeBuffer = ByteBuffer.allocate((int) zipEntry.getSize());
-
-            while (true)
+            if (zipEntry == null)
             {
-                byte[] bytes = new byte[1024];
-                int status = zipInputStream.read(bytes);
-                if (status == -1)
-                {
-                    break;
-                }
-                decodeBuffer.put(bytes, 0, status);
+                throw new IOException("ZIP archive has no entries.");
             }
+            long declaredSize = zipEntry.getSize();
+            int sizeHint = declaredSize > 0 && declaredSize < Integer.MAX_VALUE ? (int) declaredSize : Math.max(compressData.length * 2, 1024);
+            // Cap the initial buffer so an oversized declared entry size cannot trigger a huge upfront
+            // allocation; the growable stream still expands as needed for genuinely large entries.
+            sizeHint = Math.min(sizeHint, MAX_INITIAL_BUFFER);
 
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream(sizeHint);
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = zipInputStream.read(buffer)) != -1)
+            {
+                outputStream.write(buffer, 0, read);
+            }
             if (zipInputStream.getNextEntry() != null)
             {
-                IDummyLogger.log(ERROR, getClass(), "Unsupported multiple entry inside archive. File available by URL: '" + request.getFileInfoHolder().getAccessLink().getAccessLink() + "';", null);
+                IDummyLogger.log(IDummyLogger.WARNING, "ZIP archive has multiple entries; only the first is used.");
             }
-
-            return decodeBuffer.array();
+            return outputStream.toByteArray();
         }
-        catch (IOException ioException)
-        {
-            ioException.printStackTrace();
-        }
-
-        return new byte[0];
     }
 
+    /**
+     * EN: Recognises a ZIP archive by its local-file-header magic ({@code PK\003\004}) and minimum
+     *     length. <br>
+     * RU: Распознаёт ZIP-архив по сигнатуре локального заголовка ({@code PK\003\004}) и минимальной
+     *     длине. <br>
+     * ==================================================================<br>
+     * EN: @param compressData the candidate bytes / RU: @param compressData байты-кандидат <br>
+     * EN: @param expectedFinalLength expected uncompressed length or -1 / RU: @param expectedFinalLength ожидаемая распакованная длина или -1 <br>
+     * @return <br>
+     *         {true}  - EN: looks like a ZIP archive / RU: похоже на ZIP-архив <br>
+     *         {false} - EN: not a ZIP archive / RU: не ZIP-архив <br>
+     **/
     @Override
-    public boolean check(DownloadRequest request, int totalArrayLength, byte[] compressDataArray)
+    public boolean check(byte[] compressData, int expectedFinalLength)
     {
-        int allocateBufferSize = getUnCompressSize(compressDataArray);
-        if (allocateBufferSize <= 0 || allocateBufferSize == Integer.MAX_VALUE)
+        if (compressData.length < LOCAL_HEADER_MIN_LENGTH)
         {
-            if (request.getDownloadedByteArray().length > 1)
-            {
-                IDummyLogger.log(ERROR, getClass(),"Cannot decode input array by ZIP method. Reason: " + "Uncompressed length is not correct! Next size found: " + allocateBufferSize + ". File '" + request.getLinkPath() + "';", null);
-                return false;
-            }
-            // System.out.println("Cannot decode input array by ZIP method. Reason: " + "File is not a archive. File '" + request.getLinkPath() + "';");
             return false;
         }
-        return true;
+        boolean zipMagic = compressData[0] == 0x50 && compressData[1] == 0x4B && compressData[2] == 0x03 && compressData[3] == 0x04;
+        return zipMagic;
     }
 
     @Override
     public int getCompressSize(byte[] compressedDataArray)
     {
-        // java.util.zip.ZipConstants = static final int LOCSIZ = 18;
-
-        long uncompSize = 0;
-        uncompSize |= (compressedDataArray[18] & 0xff) | ((compressedDataArray[18 + 1] & 0xff) << 8);
-        uncompSize |= ((long) (compressedDataArray[18 + 2] & 0xff) | ((compressedDataArray[18 + 3] & 0xff) << 8)) << 16;
-        uncompSize &= 0xffffffffL;
-        return (int) Math.min(Integer.MAX_VALUE, uncompSize);
+        long compressedSize = 0;
+        compressedSize |= (compressedDataArray[18] & 0xff) | ((compressedDataArray[18 + 1] & 0xff) << 8);
+        compressedSize |= ((long) (compressedDataArray[18 + 2] & 0xff) | ((compressedDataArray[18 + 3] & 0xff) << 8)) << 16;
+        compressedSize &= 0xffffffffL;
+        return (int) Math.min(Integer.MAX_VALUE, compressedSize);
     }
 
     @Override
     public int getUnCompressSize(byte[] compressedDataArray)
     {
-        // java.util.zip.ZipConstants = static final int LOCLEN = 22;
-
         long uncompSize = 0;
         uncompSize |= (compressedDataArray[22] & 0xff) | ((compressedDataArray[22 + 1] & 0xff) << 8);
         uncompSize |= ((long) (compressedDataArray[22 + 2] & 0xff) | ((compressedDataArray[22 + 3] & 0xff) << 8)) << 16;

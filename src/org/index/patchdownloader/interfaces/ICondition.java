@@ -1,8 +1,8 @@
 package org.index.patchdownloader.interfaces;
 
 import org.index.patchdownloader.config.configs.MainConfig;
-import org.index.patchdownloader.impl.conditions.ConditionCheckFiles;
 import org.index.patchdownloader.impl.conditions.ConditionName;
+import org.index.patchdownloader.impl.conditions.ConditionStartupCompare;
 import org.index.patchdownloader.model.holders.FileInfoHolder;
 import org.index.patchdownloader.model.linkgenerator.GeneralLinkGenerator;
 
@@ -46,9 +46,14 @@ public interface ICondition
     public static List<ICondition> loadConditions(GeneralLinkGenerator generalLinkGenerator)
     {
         List<ICondition> conditionList = new ArrayList<>();
-        if (MainConfig.RESTORE_DOWNLOADING && (MainConfig.CHECK_BY_NAME || MainConfig.CHECK_BY_HASH_SUM || MainConfig.CHECK_BY_SIZE))
+        // One start-up comparator handles BOTH restore (verify files already in the output folder) and
+        // source-compare (copy proven files from a local source). Restore has strict priority internally:
+        // it runs first and a restored file is never re-copied. See ConditionStartupCompare.
+        boolean restoreEnabled = MainConfig.RESTORE_DOWNLOADING && (MainConfig.CHECK_BY_NAME || MainConfig.CHECK_BY_HASH_SUM || MainConfig.CHECK_BY_SIZE);
+        boolean sourceEnabled = MainConfig.SOURCE_COMPARE_PATH != null;
+        if (restoreEnabled || sourceEnabled)
         {
-            ICondition condition = new ConditionCheckFiles(generalLinkGenerator);
+            ICondition condition = new ConditionStartupCompare(generalLinkGenerator);
             if (condition instanceof ILoadable)
             {
                 ((ILoadable) condition).load();
