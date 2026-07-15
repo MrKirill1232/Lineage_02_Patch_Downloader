@@ -6,6 +6,7 @@
       <element id="extracted-dir" path="$PROJECT_DIR$/libs/xz-1.9.jar" path-in-jar="/" />
       <element id="extracted-dir" path="$PROJECT_DIR$/libs/json-simple-1.1.1.jar" path-in-jar="/" />
       <element id="extracted-dir" path="$PROJECT_DIR$/libs/dom4j-2.1.4.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/libs/ConfigFieldParser.jar" path-in-jar="/" />
     </root>
   </artifact>
 </component>

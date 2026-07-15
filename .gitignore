@@ -31,3 +31,11 @@ bin/
 output/
 output_ref/
 output_akumu/
+
+### Repo hygiene (kept on disk, not tracked) ###
+qodana.yaml
+.ai/
+*.iml
+# Keep only the build-artifact definitions under .idea; everything else is per-user IDE state.
+/.idea/*
+!/.idea/artifacts/

@@ -1,0 +1,30 @@
+<component name="ArtifactManager">
+  <artifact name="Summary_output">
+    <output-path>$PROJECT_DIR$/out/artifacts/Summary_output</output-path>
+    <root id="root">
+      <element id="directory" name="summary_aio">
+        <element id="dir-copy" path="$PROJECT_DIR$/work" />
+        <element id="file-copy" path="$PROJECT_DIR$/example_download_akumu.bat" />
+        <element id="file-copy" path="$PROJECT_DIR$/example_download_nc_japan.bat" />
+        <element id="file-copy" path="$PROJECT_DIR$/example_last_version.bat" />
+        <element id="file-copy" path="$PROJECT_DIR$/start.bat" />
+        <element id="file-copy" path="$PROJECT_DIR$/start_specific.bat" />
+        <element id="file-copy" path="$PROJECT_DIR$/set_java.bat" />
+        <element id="artifact" artifact-name="Lineage_02_Patch_Downloader_AIO:jar" />
+      </element>
+      <element id="directory" name="summary_lib">
+        <element id="dir-copy" path="$PROJECT_DIR$/work" />
+        <element id="file-copy" path="$PROJECT_DIR$/example_download_akumu.bat" />
+        <element id="file-copy" path="$PROJECT_DIR$/example_download_nc_japan.bat" />
+        <element id="file-copy" path="$PROJECT_DIR$/example_last_version.bat" />
+        <element id="file-copy" path="$PROJECT_DIR$/start.bat" />
+        <element id="file-copy" path="$PROJECT_DIR$/start_specific.bat" />
+        <element id="directory" name="lib">
+          <element id="library" level="project" name="libs" />
+        </element>
+        <element id="file-copy" path="$PROJECT_DIR$/set_java.bat" />
+        <element id="artifact" artifact-name="Lineage_02_Patch_Downloader:jar" />
+      </element>
+    </root>
+  </artifact>
+</component>
