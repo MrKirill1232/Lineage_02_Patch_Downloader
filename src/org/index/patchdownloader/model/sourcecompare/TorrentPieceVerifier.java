@@ -16,6 +16,7 @@ import org.index.patchdownloader.model.akumu.TorrentMetadata;
 import org.index.patchdownloader.model.holders.FileInfoHolder;
 import org.index.patchdownloader.model.sourcecompare.TorrentPieceTable.FilePieceRange;
 import org.index.patchdownloader.model.sourcecompare.TorrentPieceTable.Segment;
+import org.index.patchdownloader.util.FileUtils;
 
 /**
  * EN: Source verifier for the akumu torrent: verifies a file against the source folder using the GLOBAL piece
@@ -53,6 +54,7 @@ public class TorrentPieceVerifier implements ISourceVerifier
     private final boolean _checkHash;
     private final Map<Integer, CompletableFuture<PieceState>> _pieceCache;
     private final Map<String, Integer> _indexByPath;
+    private final boolean[] _safePath;
 
     public TorrentPieceVerifier(File sourceRoot, TorrentMetadata torrent, boolean checkSize, boolean checkHash)
     {
@@ -64,9 +66,27 @@ public class TorrentPieceVerifier implements ISourceVerifier
         _pieceCache = new ConcurrentHashMap<>();
         _indexByPath = new HashMap<>();
         List<TorrentMetadata.FileEntry> files = torrent.getFiles();
+        _safePath = new boolean[files.size()];
         for (int index = 0; index < files.size(); index++)
         {
-            _indexByPath.put(normalize(files.get(index).getRelativePath()), index);
+            String relative = files.get(index).getRelativePath();
+            _indexByPath.put(normalize(relative), index);
+            // The file map filters unsafe paths, but a boundary piece still touches the RAW neighbour entry; check
+            // containment once so a crafted torrent path ('../..') is never opened/hashed (read-oracle guard).
+            _safePath[index] = isWithinRoot(relative);
+        }
+    }
+
+    private boolean isWithinRoot(String relativePath)
+    {
+        try
+        {
+            FileUtils.ensureWithinDirectory(_sourceRoot, new File(_sourceRoot, relativePath), relativePath);
+            return true;
+        }
+        catch (IOException e)
+        {
+            return false;
         }
     }
 
@@ -207,6 +227,10 @@ public class TorrentPieceVerifier implements ISourceVerifier
         List<Segment> segments = _table.segments(pieceIndex);
         for (Segment segment : segments)
         {
+            if (!_safePath[segment.fileIndex()])
+            {
+                return PieceState.UNVERIFIABLE;
+            }
             File file = sourceFile(segment.fileIndex());
             if (!file.isFile())
             {

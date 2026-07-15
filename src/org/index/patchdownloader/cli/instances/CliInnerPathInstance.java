@@ -38,6 +38,9 @@ public class CliInnerPathInstance implements ICliInstance
             return currIndex;
         }
         MainConfig.DOWNLOAD_PATH = new File(MainConfig.PATH_TO_RUNNING, value);
+        // Re-pin the (non-explicit) temp dir under the new output path (see -path); onEndLoad derived it against
+        // the old DOWNLOAD_PATH before this CLI override.
+        MainConfig.redriveTempFileDirAfterPathChange();
         CliArgs.logApplied(arguments[currIndex], MainConfig.DOWNLOAD_PATH);
         return currIndex + 1;
     }

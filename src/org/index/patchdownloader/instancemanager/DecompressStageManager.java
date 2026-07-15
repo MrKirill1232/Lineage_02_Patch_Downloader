@@ -1,45 +1,38 @@
 package org.index.patchdownloader.instancemanager;
 
-import org.index.patchdownloader.config.configs.MainConfig;
-import org.index.patchdownloader.enums.HashType;
-import org.index.patchdownloader.interfaces.IDummyLogger;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.channels.WritableByteChannel;
+import java.util.Arrays;
+
+import org.index.patchdownloader.enums.StorageStrategy;
 import org.index.patchdownloader.model.decompress.Decompressors;
-import org.index.patchdownloader.model.holders.FileInfoHolder;
-import org.index.patchdownloader.model.pipeline.FileDownloadTask;
 import org.index.patchdownloader.model.pipeline.enums.DownloadFailureType;
 import org.index.patchdownloader.model.pipeline.enums.TaskStage;
+import org.index.patchdownloader.model.pipeline.request.AbstractFileRequest;
 import org.index.patchdownloader.model.pipeline.retry.NoRetryHandler;
 
 /**
- * EN: Decompress stage (CPU-bound; does not use ForkJoinPool (FJP).ManagedBlocker because the work
- *     never blocks). Concatenates the downloaded parts, decodes via the stateless {@link Decompressors},
- *     and optionally verifies size/hash (warn only). Failures are terminal — no retries (uses
- *     {@link NoRetryHandler}). The run-wide hash algorithm is injected by the coordinator.<br>
- * RU: Стадия распаковки (нагружает CPU; не использует ForkJoinPool (FJP).ManagedBlocker, поскольку
- *     операция никогда не блокируется). Склеивает скачанные части, декодирует через stateless
- *     {@link Decompressors} и опционально проверяет размер/хеш (только предупреждение). Сбои
- *     терминальны — повторов нет (используется {@link NoRetryHandler}). Алгоритм хеша на весь
- *     запуск задаётся координатором.<br>
+ * EN: Decompress stage (CPU-bound; does not use ForkJoinPool (FJP).ManagedBlocker because the work never
+ *     blocks). Reads the request's raw source, decodes via the stateless {@link Decompressors}, and writes the
+ *     result to the request's decompressed sink. It does NOT validate the output — size and hash (or torrent
+ *     piece) verification runs asynchronously AFTER the file is stored, against the finished file on disk (see
+ *     {@code IDownloadVerifier}), so a single verification model covers every storage mode. Failures are
+ *     terminal — no retries (uses {@link NoRetryHandler}).<br>
+ * RU: Стадия распаковки (нагружает CPU; не использует ForkJoinPool (FJP).ManagedBlocker, поскольку операция
+ *     никогда не блокируется). Читает сырой источник запроса, декодирует через stateless {@link Decompressors}
+ *     и пишет результат в приёмник распакованных данных запроса. Она НЕ проверяет вывод — проверка размера и
+ *     хеша (или куска торрента) выполняется асинхронно ПОСЛЕ сохранения файла, по готовому файлу на диске (см.
+ *     {@code IDownloadVerifier}), поэтому единая модель проверки покрывает любой режим хранения. Сбои
+ *     терминальны — повторов нет (используется {@link NoRetryHandler}).<br>
  **/
 public class DecompressStageManager extends AbstractStageManager
 {
-    private volatile HashType _hashType;
-
     private DecompressStageManager()
     {
         super(NoRetryHandler.INSTANCE);
-        _hashType = null;
-    }
-
-    /**
-     * EN: Sets the hash algorithm used for the optional hash-sum check (same for every file of a run). <br>
-     * RU: Задаёт алгоритм хеша для опциональной проверки контрольной суммы (единый на весь запуск). <br>
-     * ==================================================================<br>
-     * EN: @param hashType the run's hash algorithm / RU: @param hashType алгоритм хеша запуска <br>
-     **/
-    public void setHashType(HashType hashType)
-    {
-        _hashType = hashType;
     }
 
     @Override
@@ -49,92 +42,137 @@ public class DecompressStageManager extends AbstractStageManager
     }
 
     /**
-     * EN: Concatenates the raw parts, decompresses them into the task, and runs the optional
-     *     size/hash validation. <br>
-     * RU: Склеивает сырые части, распаковывает их в задачу и выполняет опциональную проверку
-     *     размера/хеша. <br>
+     * EN: Decompresses one request, picking the path from its {@link StorageStrategy}: an in-memory request keeps
+     *     the fast {@code byte[]} path (whole raw decoded to a whole array, then written once), while a temp-file
+     *     request streams raw source → codec → decompressed sink so a payload larger than the heap never has to
+     *     materialise. Both reach the byte planes only through
+     *     {@link org.index.patchdownloader.interfaces.IDecompressRequest}, so the storage mode differs only in
+     *     what the channels are backed by, never in the decompressed output. <br>
+     * RU: Распаковывает один запрос, выбирая путь по его {@link StorageStrategy}: запрос в памяти сохраняет
+     *     быстрый путь по {@code byte[]} (весь сырой объём декодируется в целый массив и пишется одной записью),
+     *     тогда как запрос с временным файлом потоково гонит сырой источник → кодек → приёмник распакованных
+     *     данных, поэтому объём больше кучи никогда не приходится материализовать. Оба достигают слоёв байтов
+     *     только через {@link org.index.patchdownloader.interfaces.IDecompressRequest}, поэтому режим хранения
+     *     различается лишь тем, чем подкреплены каналы, но не распакованным выводом. <br>
      * ==================================================================<br>
-     * EN: @param task the task to decompress / RU: @param task задача для распаковки <br>
+     * EN: @param task the request to decompress / RU: @param task запрос для распаковки <br>
      **/
     @Override
-    protected void processTask(FileDownloadTask task) throws Exception
+    protected void processTask(AbstractFileRequest task) throws Exception
     {
-        FileInfoHolder fileInfo = task.getFileInfo();
-        byte[] combined = concatParts(task.getDownloadedParts());
-        byte[] out = Decompressors.decompress(fileInfo.getCompressType(), combined, fileInfo.getFileLength());
-        validate(fileInfo, out);
-        task.setDecompressed(out);
+        if (task.storageStrategy() == StorageStrategy.MEMORY)
+        {
+            decompressInMemory(task);
+        }
+        else
+        {
+            decompressStreaming(task);
+        }
+        task.decompressComplete();
     }
 
     /**
-     * EN: Verifies the decompressed length and hash-sum against the file metadata when the checks are
-     *     enabled; a mismatch is logged as a warning (never silently swallowed, never fatal here). <br>
-     * RU: Проверяет длину и контрольную сумму распакованных данных по метаданным файла, если проверки
-     *     включены; несоответствие логируется как предупреждение (не глотается молча, не фатально). <br>
+     * EN: The all-memory fast path: drain the raw source into one array, decode it with the {@code byte[]} codec,
+     *     then write it to the decompressed sink in a single call (which lets the in-memory sink adopt the array
+     *     without copying). <br>
+     * RU: Быстрый путь «всё в памяти»: вычитать сырой источник в один массив, декодировать его кодеком по
+     *     {@code byte[]} и записать в приёмник распакованных данных одной записью (что позволяет приёмнику в
+     *     памяти принять массив без копирования). <br>
      * ==================================================================<br>
-     * EN: @param fileInfo the file metadata / RU: @param fileInfo метаданные файла <br>
-     * EN: @param out the decompressed bytes / RU: @param out распакованные байты <br>
+     * EN: @param task the in-memory request to decompress / RU: @param task запрос в памяти для распаковки <br>
      **/
-    private void validate(FileInfoHolder fileInfo, byte[] out)
+    private void decompressInMemory(AbstractFileRequest task) throws IOException
     {
-        if (MainConfig.CHECK_FILE_SIZE)
+        byte[] combined;
+        try (ReadableByteChannel raw = task.rawSource())
         {
-            int expected = fileInfo.getFileLength() != -1 ? fileInfo.getFileLength() : (fileInfo.getAccessLink() != null ? fileInfo.getAccessLink().getHttpLength() : -1);
-            if (expected > 0 && out.length != expected)
-            {
-                IDummyLogger.log(IDummyLogger.WARNING, "File '" + fileInfo.getLinkPath() + "' has length " + out.length + " but expected " + expected + ".");
-            }
+            combined = readAll(raw);
         }
-        if (MainConfig.CHECK_HASH_SUM)
+        byte[] out = Decompressors.decompress(task.compressType(), combined, task.expectedLength());
+        try (WritableByteChannel sink = task.decompressedSink())
         {
-            String expectedHash = fileInfo.getFileHashSum();
-            if (expectedHash == null)
-            {
-                IDummyLogger.log(IDummyLogger.WARNING, "File '" + fileInfo.getLinkPath() + "' has no original hash-sum; skipping hash check.");
-            }
-            else if (_hashType == null || !HashingManager.check(_hashType, out, expectedHash))
-            {
-                IDummyLogger.log(IDummyLogger.WARNING, "File '" + fileInfo.getLinkPath() + "' hash-sum differs from the original.");
-            }
+            sink.write(ByteBuffer.wrap(out));
         }
     }
 
     /**
-     * EN: Concatenates all non-null downloaded parts into a single contiguous byte array. <br>
-     * RU: Склеивает все скачанные части, не равные null, в один непрерывный массив байтов. <br>
+     * EN: The streaming path for temp-file requests: open the raw source and decompressed sink and run the payload
+     *     through the streaming codec, which never holds the whole raw or whole decompressed payload in memory; the
+     *     output is verified downstream by the async after-store verifier, not here. The raw source is the ALREADY
+     *     ASSEMBLED raw temp file, never the live download stream: although both codecs (LZMA / ZIP) are
+     *     forward-streaming and could in principle decode as bytes arrive, that holds ONLY for a strictly in-order
+     *     single stream. The general case fetches the payload as parallel, out-of-order byte ranges (HTTP 206 / CDN
+     *     parts) that land at their absolute offsets, and a sequential decoder cannot consume byte {@code K+1}
+     *     before byte {@code K} — so the download stage must finish and assemble the whole raw file before this
+     *     stage decodes it. Fusing decode into the download is therefore NOT possible in the general case (only for
+     *     an in-order single stream), which is why decompress is a separate stage over the assembled raw source. <br>
+     * RU: Потоковый путь для запросов с временным файлом: открыть сырой источник и приёмник распакованных данных и
+     *     прогнать объём через потоковый кодек, который никогда не держит в памяти весь сырой либо весь
+     *     распакованный объём; вывод проверяется далее асинхронным верификатором, работающим после сохранения, а не
+     *     здесь. Сырой источник — это УЖЕ СОБРАННЫЙ сырой временный файл, а не живой поток загрузки: хотя оба кодека
+     *     (LZMA / ZIP) потоковые и в принципе могли бы декодировать по мере поступления байтов, это верно ТОЛЬКО для
+     *     строго последовательного одиночного потока. В общем случае объём качается параллельными байтовыми
+     *     диапазонами вне порядка (HTTP 206 / части CDN), которые ложатся по своим абсолютным смещениям, а
+     *     последовательный декодер не может взять байт {@code K+1} раньше байта {@code K} — поэтому стадия загрузки
+     *     обязана завершиться и собрать весь сырой файл, прежде чем эта стадия его декодирует. Поэтому слить
+     *     декодирование с загрузкой в общем случае НЕЛЬЗЯ (только для последовательного одиночного потока); из-за
+     *     этого распаковка — отдельная стадия над собранным сырым источником. <br>
      * ==================================================================<br>
-     * EN: @param parts the per-part byte arrays / RU: @param parts массивы байтов по частям <br>
+     * EN: @param task the temp-file request to decompress / RU: @param task запрос с временным файлом для распаковки <br>
+     **/
+    private void decompressStreaming(AbstractFileRequest task) throws IOException
+    {
+        try (ReadableByteChannel raw = task.rawSource();
+             WritableByteChannel sink = task.decompressedSink())
+        {
+            Decompressors.decompress(task.compressType(), raw, sink, task.expectedLength());
+        }
+    }
+
+    /**
+     * EN: Reads a raw-source channel fully into a byte array. When the channel reports its size (a
+     *     {@link SeekableByteChannel}: the in-memory concatenated parts or a temp file), the array is allocated
+     *     exactly once — matching the old {@code concatParts} footprint; otherwise it grows. A short read
+     *     (fewer bytes than the declared size) is trimmed. <br>
+     * RU: Полностью вычитывает канал сырого источника в массив байтов. Когда канал сообщает свой размер
+     *     ({@link SeekableByteChannel}: склеенные части в памяти или временный файл), массив выделяется ровно
+     *     один раз — как прежний {@code concatParts}; иначе растёт. Недобор (меньше байтов, чем заявленный
+     *     размер) обрезается. <br>
+     * ==================================================================<br>
+     * EN: @param channel the raw byte source / RU: @param channel источник сырых байтов <br>
      * @return <br>
-     *         {byte[]} - EN: the concatenated bytes / RU: склеенные байты <br>
+     *         {byte[]} - EN: all bytes read from the channel / RU: все прочитанные из канала байты <br>
      **/
-    private static byte[] concatParts(byte[][] parts)
+    private static byte[] readAll(ReadableByteChannel channel) throws IOException
     {
-        if (parts == null)
+        long declaredSize = channel instanceof SeekableByteChannel seekable ? seekable.size() : -1L;
+        if (declaredSize >= 0 && declaredSize <= Integer.MAX_VALUE)
         {
-            return new byte[0];
-        }
-        int total = 0;
-        for (byte[] part : parts)
-        {
-            if (part != null)
+            byte[] buffer = new byte[(int) declaredSize];
+            ByteBuffer view = ByteBuffer.wrap(buffer);
+            while (view.hasRemaining() && channel.read(view) >= 0)
             {
-                total += part.length;
+                // keep reading until the declared size is filled or the channel ends
             }
+            int read = view.position();
+            return read == buffer.length ? buffer : Arrays.copyOf(buffer, read);
         }
-        byte[] combined = new byte[total];
-        int offset = 0;
-        for (int index = 0; index < parts.length; index++)
+        byte[] buffer = new byte[0];
+        ByteBuffer view = ByteBuffer.allocate(64 * 1024);
+        int read;
+        while ((read = channel.read(view)) >= 0)
         {
-            byte[] part = parts[index];
-            if (part != null)
+            if (read == 0)
             {
-                System.arraycopy(part, 0, combined, offset, part.length);
-                offset += part.length;
-                // Drop the source reference as it is copied to reduce the transient compressed-data peak.
-                parts[index] = null;
+                continue;
             }
+            view.flip();
+            int grown = buffer.length;
+            buffer = Arrays.copyOf(buffer, grown + view.remaining());
+            view.get(buffer, grown, view.remaining());
+            view.clear();
         }
-        return combined;
+        return buffer;
     }
 
     @Override

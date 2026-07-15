@@ -1,7 +1,7 @@
 package org.index.patchdownloader.model.pipeline.retry;
 
 import org.index.patchdownloader.instancemanager.AbstractStageManager;
-import org.index.patchdownloader.model.pipeline.FileDownloadTask;
+import org.index.patchdownloader.model.pipeline.request.AbstractFileRequest;
 import org.index.patchdownloader.model.pipeline.enums.DownloadFailureType;
 
 /**
@@ -23,7 +23,7 @@ public interface IRetryHandler
      *         {true}  - EN: retry (re-submit) / RU: повторить (переотправить) <br>
      *         {false} - EN: give up (terminal FAILED) / RU: сдаться (терминальный FAILED) <br>
      **/
-    boolean shouldRetry(FileDownloadTask task, DownloadFailureType failure);
+    boolean shouldRetry(AbstractFileRequest task, DownloadFailureType failure);
 
     /**
      * EN: Performs the retry: bumps the attempt counter on the task and re-submits it into the
@@ -35,5 +35,5 @@ public interface IRetryHandler
      * EN: @param failure the classified failure reason / RU: @param failure классифицированная причина сбоя <br>
      * EN: @param owner the stage that owns the retry / RU: @param owner стадия, владеющая повтором <br>
      **/
-    void onRetry(FileDownloadTask task, DownloadFailureType failure, AbstractStageManager owner);
+    void onRetry(AbstractFileRequest task, DownloadFailureType failure, AbstractStageManager owner);
 }

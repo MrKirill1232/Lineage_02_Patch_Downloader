@@ -121,6 +121,12 @@ public final class TorrentMetadata
             {
                 Map<String, Object> fileMap = (Map<String, Object>) fileObject;
                 long length = asLong(fileMap.get("length"));
+                if (length < 0)
+                {
+                    // A negative length is malformed and (via the running global offset) would corrupt EVERY later
+                    // entry's byte range, so refuse the whole torrent rather than build a poisoned file map.
+                    throw new IllegalStateException("Torrent file entry has a negative length: " + length);
+                }
                 Object pathObject = fileMap.get("path");
                 if (!(pathObject instanceof List) || ((List<?>) pathObject).isEmpty())
                 {
@@ -148,6 +154,10 @@ public final class TorrentMetadata
                 throw new IllegalStateException("Torrent 'info' has neither 'files' nor 'length'.");
             }
             long length = asLong(lengthObject);
+            if (length < 0)
+            {
+                throw new IllegalStateException("Torrent 'info.length' is negative: " + length);
+            }
             files.add(new FileEntry(name, length, 0L));
             running = length;
         }

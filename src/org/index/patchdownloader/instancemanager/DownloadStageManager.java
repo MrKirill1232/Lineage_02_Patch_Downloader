@@ -3,7 +3,6 @@ package org.index.patchdownloader.instancemanager;
 import java.net.http.HttpClient;
 import java.util.List;
 
-import org.index.patchdownloader.model.pipeline.FileDownloadTask;
 import org.index.patchdownloader.model.pipeline.download.AbstractDownloadStrategy;
 import org.index.patchdownloader.model.pipeline.download.AkumuDownloadStrategy;
 import org.index.patchdownloader.model.pipeline.download.CdnPartsDownloadStrategy;
@@ -11,6 +10,7 @@ import org.index.patchdownloader.model.pipeline.download.SelfSplitDownloadStrate
 import org.index.patchdownloader.model.pipeline.download.SingleDownloadStrategy;
 import org.index.patchdownloader.model.pipeline.enums.DownloadFailureType;
 import org.index.patchdownloader.model.pipeline.enums.TaskStage;
+import org.index.patchdownloader.model.pipeline.request.AbstractFileRequest;
 import org.index.patchdownloader.model.pipeline.retry.DownloadRetryHandler;
 
 /**
@@ -50,7 +50,7 @@ public class DownloadStageManager extends AbstractStageManager
      * EN: @param task the task to download / RU: @param task задача для загрузки <br>
      **/
     @Override
-    protected void processTask(FileDownloadTask task) throws Exception
+    protected void processTask(AbstractFileRequest task) throws Exception
     {
         task.markActive();
         selectStrategy(task).download(task);
@@ -66,7 +66,7 @@ public class DownloadStageManager extends AbstractStageManager
      * @return <br>
      *         {AbstractDownloadStrategy} - EN: the chosen strategy / RU: выбранная стратегия <br>
      **/
-    private AbstractDownloadStrategy selectStrategy(FileDownloadTask task)
+    private AbstractDownloadStrategy selectStrategy(AbstractFileRequest task)
     {
         for (AbstractDownloadStrategy strategy : _strategies)
         {

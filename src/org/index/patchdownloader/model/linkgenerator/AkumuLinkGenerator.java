@@ -2,6 +2,7 @@ package org.index.patchdownloader.model.linkgenerator;
 
 import java.io.File;
 import java.net.URI;
+import java.util.Collection;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -14,8 +15,11 @@ import org.index.patchdownloader.model.akumu.AnubisClient;
 import org.index.patchdownloader.model.akumu.TorrentMetadata;
 import org.index.patchdownloader.model.holders.FileInfoHolder;
 import org.index.patchdownloader.model.holders.LinkInfoHolder;
+import org.index.patchdownloader.model.pipeline.verify.IDownloadVerifier;
+import org.index.patchdownloader.model.pipeline.verify.IncrementalPieceVerifier;
 import org.index.patchdownloader.model.sourcecompare.ISourceVerifier;
 import org.index.patchdownloader.model.sourcecompare.TorrentPieceVerifier;
+import org.index.patchdownloader.util.FileUtils;
 
 /**
  * EN: Link generator for the akumu HTTP mirror. Given the configured folder URL it fetches (through the
@@ -100,6 +104,31 @@ public class AkumuLinkGenerator extends GeneralLinkGenerator
             return new TorrentPieceVerifier(root, _torrent, checkSize, checkHash);
         }
         return super.createSourceVerifier(root, checkSize, checkHash);
+    }
+
+    /**
+     * EN: Post-store verifier for an akumu run: when hashing is on and the torrent carries piece hashes, uses the
+     *     {@link IncrementalPieceVerifier} (the only cryptographic proof akumu has — global piece hashes verified
+     *     incrementally as files land). Otherwise (hashing off → size-only, or a torrent without pieces) falls
+     *     back to the base per-file verifier, which for akumu reduces to a size check. <br>
+     * RU: Пост-сохранный верификатор для запуска akumu: когда хеширование включено и торрент несёт хеши кусков,
+     *     использует {@link IncrementalPieceVerifier} (единственное криптодоказательство akumu — глобальные хеши
+     *     кусков, проверяемые инкрементально по мере прихода файлов). Иначе (хеширование выключено → только
+     *     размер, или торрент без кусков) откатывается к базовому пофайловому верификатору, который для akumu
+     *     сводится к проверке размера. <br>
+     * ==================================================================<br>
+     * EN: @param parallelism the number of verification worker threads / RU: @param parallelism число потоков-воркеров проверки <br>
+     * @return <br>
+     *         {IDownloadVerifier} - EN: the incremental piece verifier, or the base fallback / RU: инкрементный piece-верификатор или базовый запасной <br>
+     **/
+    @Override
+    public IDownloadVerifier createDownloadVerifier(Collection<String> scheduledLinkPaths, int parallelism)
+    {
+        if (MainConfig.CHECK_HASH_SUM && _torrent != null && _torrent.hasPieceHashes())
+        {
+            return new IncrementalPieceVerifier(_torrent, MainConfig.DOWNLOAD_PATH, scheduledLinkPaths, parallelism);
+        }
+        return super.createDownloadVerifier(scheduledLinkPaths, parallelism);
     }
 
     /**
@@ -199,8 +228,8 @@ public class AkumuLinkGenerator extends GeneralLinkGenerator
         URI fileUri = new URI(fileBase.getScheme(), fileBase.getAuthority(), fileBase.getPath() + relativePath, null, null);
 
         FileInfoHolder fileInfo = new FileInfoHolder(fileName, filePath, ArchiveType.NONE, false, 0);
-        fileInfo.setDownloadDataLength((int) Math.min(Integer.MAX_VALUE, entry.getLength()));
-        fileInfo.setFileLength((int) Math.min(Integer.MAX_VALUE, entry.getLength()));
+        fileInfo.setDownloadDataLength(entry.getLength());
+        fileInfo.setFileLength(entry.getLength());
         fileInfo.setAccessLink(new LinkInfoHolder(fileInfo));
         fileInfo.getAccessLink().setAccessLink(fileUri.toASCIIString());
 
@@ -256,46 +285,11 @@ public class AkumuLinkGenerator extends GeneralLinkGenerator
         }
         for (String segment : relativePath.split("/"))
         {
-            if (segment.equals("..") || isReservedDeviceName(segment))
+            if (segment.equals("..") || FileUtils.isReservedDeviceName(segment))
             {
                 return false;
             }
         }
         return true;
-    }
-
-    /**
-     * EN: Whether a single path segment is a reserved Windows device name (CON, PRN, AUX, NUL,
-     *     COM1-9, LPT1-9, case-insensitive), tested against the base name before its first {@code .}
-     *     because {@code new File(DOWNLOAD_PATH, "patch/nul")} resolves to the NUL device rather than a
-     *     real file — the store silently succeeds while nothing lands on disk. <br>
-     * RU: Является ли отдельный сегмент пути зарезервированным именем устройства Windows (CON, PRN, AUX,
-     *     NUL, COM1-9, LPT1-9, без учёта регистра); проверяется базовая часть имени до первой {@code .},
-     *     поскольку {@code new File(DOWNLOAD_PATH, "patch/nul")} указывает на устройство NUL, а не на
-     *     реальный файл — запись «успешна», но на диск ничего не попадает. <br>
-     * ==================================================================<br>
-     * EN: @param segment a single path segment / RU: @param segment отдельный сегмент пути <br>
-     * @return <br>
-     *         {true}  - EN: reserved device name / RU: зарезервированное имя устройства <br>
-     *         {false} - EN: ordinary name / RU: обычное имя <br>
-     **/
-    private static boolean isReservedDeviceName(String segment)
-    {
-        int dot = segment.indexOf('.');
-        String baseName = (dot < 0 ? segment : segment.substring(0, dot)).toUpperCase();
-        switch (baseName)
-        {
-            case "CON":
-            case "PRN":
-            case "AUX":
-            case "NUL":
-            case "COM1": case "COM2": case "COM3": case "COM4": case "COM5":
-            case "COM6": case "COM7": case "COM8": case "COM9":
-            case "LPT1": case "LPT2": case "LPT3": case "LPT4": case "LPT5":
-            case "LPT6": case "LPT7": case "LPT8": case "LPT9":
-                return true;
-            default:
-                return false;
-        }
     }
 }

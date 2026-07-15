@@ -107,15 +107,17 @@ public class UpNovaFileList implements IXmlParser
                 }
                 String name = rawName.replaceAll("\\\\", "/");
                 String path = rawPath.replaceAll("\\\\", "/");
-                int size = IXmlParser.parseInteger(fileModelElements, "Size", -1);
+                long size = IXmlParser.parseLong(fileModelElements, "Size", -1);
                 String hash = IXmlParser.parseString(fileModelElements, "Hash", null);
                 FileInfoHolder fileInfoHolder;
                 if (path.equalsIgnoreCase(_initialName))
                 {   // in head of project
                     fileInfoHolder = new FileInfoHolder(name, "", ArchiveType.ZIP_ARCHIVE, false, 0);
                 }
-                else if (path.regionMatches(true, 0, _initialName, 0, _initialName.length()))
-                {   // in sub-folder
+                else if (path.regionMatches(true, 0, _initialName, 0, _initialName.length())
+                        && path.length() > _initialName.length() && path.charAt(_initialName.length()) == '/')
+                {   // in sub-folder — require a '/' right after the project root so a sibling folder whose name
+                    // merely starts with the root ("L2" vs "L2Voice") is NOT mis-parsed into a garbled path.
                     fileInfoHolder = new FileInfoHolder(name, path.substring(_initialName.length() + 1), ArchiveType.ZIP_ARCHIVE, false, 0);
                 }
                 else

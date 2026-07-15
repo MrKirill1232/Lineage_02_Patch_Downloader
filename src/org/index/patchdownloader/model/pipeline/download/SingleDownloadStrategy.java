@@ -2,7 +2,7 @@ package org.index.patchdownloader.model.pipeline.download;
 
 import java.net.http.HttpClient;
 
-import org.index.patchdownloader.model.pipeline.FileDownloadTask;
+import org.index.patchdownloader.interfaces.IDownloadRequest;
 
 /**
  * EN: Plain single-connection download: one GET for the whole file. The always-applicable fallback used
@@ -21,25 +21,32 @@ public class SingleDownloadStrategy extends AbstractDownloadStrategy
      * EN: Always applies — this is the fallback strategy. <br>
      * RU: Применяется всегда — это запасная стратегия. <br>
      * ==================================================================<br>
-     * EN: @param task the task / RU: @param task задача <br>
+     * EN: @param request the request / RU: @param request запрос <br>
      * @return <br>
      *         {true} - EN: always / RU: всегда <br>
      **/
     @Override
-    public boolean supports(FileDownloadTask task)
+    public boolean supports(IDownloadRequest request)
     {
         return true;
     }
 
     /**
-     * EN: Downloads the whole file with one GET into part slot 0. <br>
-     * RU: Скачивает весь файл одним GET в слот части 0. <br>
+     * EN: Downloads the whole file with one GET, streaming each body chunk into part slot 0 as it arrives
+     *     (never buffering the whole file into a single {@code byte[]}), then signals the raw payload
+     *     received. <br>
+     * RU: Скачивает весь файл одним GET, потоково записывая каждый кусок тела в слот части 0 по мере
+     *     поступления (никогда не буферизуя весь файл в один {@code byte[]}), затем сигнализирует о получении
+     *     сырых данных. <br>
      * ==================================================================<br>
-     * EN: @param task the task to download / RU: @param task задача для загрузки <br>
+     * EN: @param request the request to download / RU: @param request запрос для загрузки <br>
      **/
     @Override
-    protected void doDownload(FileDownloadTask task) throws Exception
+    protected void doDownload(IDownloadRequest request) throws Exception
     {
-        task.addDownloadedPart(0, fetchOne(task.getFileInfo().getAccessLink()));
+        long epoch = request.downloadEpoch();
+        streamOne(request.fileInfo().getAccessLink(), (offset, chunk) -> request.acceptChunk(epoch, 0, offset, chunk));
+        request.partComplete(0);
+        request.downloadComplete();
     }
 }

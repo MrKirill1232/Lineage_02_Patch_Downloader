@@ -38,6 +38,9 @@ public class CliDownloadPathInstance implements ICliInstance
             return currIndex;
         }
         MainConfig.DOWNLOAD_PATH = new File(value);
+        // -path overrides the output folder AFTER onEndLoad already derived TEMP_FILE_DIR from the OLD path, so
+        // re-pin the (non-explicit) temp dir under the new path — else temp files land on the old volume.
+        MainConfig.redriveTempFileDirAfterPathChange();
         CliArgs.logApplied(arguments[currIndex], MainConfig.DOWNLOAD_PATH);
         return currIndex + 1;
     }

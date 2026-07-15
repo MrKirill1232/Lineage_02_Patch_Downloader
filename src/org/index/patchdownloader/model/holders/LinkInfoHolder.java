@@ -6,13 +6,13 @@ public class LinkInfoHolder
 
     private String _accessLink;
     private int _httpStatus;
-    private int _httpLength;
+    private long _httpLength;
 
     public LinkInfoHolder(FileInfoHolder fileInfo)
     {
         _fileInfo = fileInfo;
         _httpStatus = -1;
-        _httpLength = -1;
+        _httpLength = -1L;
     }
 
     public FileInfoHolder getFileInfo()
@@ -40,12 +40,12 @@ public class LinkInfoHolder
         _httpStatus = httpStatus;
     }
 
-    public int getHttpLength()
+    public long getHttpLength()
     {
         return _httpLength;
     }
 
-    public void setHttpLength(int httpLength)
+    public void setHttpLength(long httpLength)
     {
         _httpLength = httpLength;
     }

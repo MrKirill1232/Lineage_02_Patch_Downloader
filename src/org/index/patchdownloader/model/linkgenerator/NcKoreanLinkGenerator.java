@@ -168,7 +168,7 @@ public class NcKoreanLinkGenerator extends GeneralLinkGenerator
             fileInfoHolder.setAccessLink(new LinkInfoHolder(fileInfoHolder));
             fileInfoHolder.getAccessLink().setAccessLink(String.format(_cdnLinkType.getGeneralCdnLink(), pathAndName));
         }
-        fileInfoHolder.setDownloadDataLength(Integer.parseInt(fileLength));
+        fileInfoHolder.setDownloadDataLength(Long.parseLong(fileLength));
         fileInfoHolder.setDownloadDataHashSum(hashSum);
 
         return fileInfoHolder;

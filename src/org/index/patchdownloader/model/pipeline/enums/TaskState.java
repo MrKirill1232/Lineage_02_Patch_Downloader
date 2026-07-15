@@ -1,10 +1,10 @@
 package org.index.patchdownloader.model.pipeline.enums;
 
 /**
- * EN: Explicit lifecycle position of a single {@code FileDownloadTask}. {@code DONE} and
+ * EN: Explicit lifecycle position of a single {@code AbstractFileRequest}. {@code DONE} and
  *     {@code FAILED} are terminal; a terminal task must never re-enter a stage. {@code RETRY_WAIT}
  *     marks a task that failed a retryable download and is about to be re-submitted.<br>
- * RU: Явная позиция жизненного цикла одной задачи {@code FileDownloadTask}. {@code DONE} и
+ * RU: Явная позиция жизненного цикла одного запроса {@code AbstractFileRequest}. {@code DONE} и
  *     {@code FAILED} — терминальные; терминальная задача не должна повторно входить в стадию.
  *     {@code RETRY_WAIT} помечает задачу, которая упала на повторяемой ошибке и будет отправлена заново.<br>
  **/

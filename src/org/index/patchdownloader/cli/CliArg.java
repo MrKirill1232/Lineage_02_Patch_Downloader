@@ -8,6 +8,7 @@ import org.index.patchdownloader.cli.instances.CliAkumuUrlInstance;
 import org.index.patchdownloader.cli.instances.CliCdnSourceInstance;
 import org.index.patchdownloader.cli.instances.CliCheckHashInstance;
 import org.index.patchdownloader.cli.instances.CliCheckSizeInstance;
+import org.index.patchdownloader.cli.instances.CliDownloadModeInstance;
 import org.index.patchdownloader.cli.instances.CliDownloadPathInstance;
 import org.index.patchdownloader.cli.instances.CliExcludeFilterInstance;
 import org.index.patchdownloader.cli.instances.CliHelpInstance;
@@ -20,6 +21,8 @@ import org.index.patchdownloader.cli.instances.CliRestoreInstance;
 import org.index.patchdownloader.cli.instances.CliRestoreSizeInstance;
 import org.index.patchdownloader.cli.instances.CliScTrustPartialInstance;
 import org.index.patchdownloader.cli.instances.CliSourceCompareInstance;
+import org.index.patchdownloader.cli.instances.CliTempDirInstance;
+import org.index.patchdownloader.cli.instances.CliTempThresholdInstance;
 import org.index.patchdownloader.cli.instances.CliThreadUsageInstance;
 import org.index.patchdownloader.cli.instances.CliThreadsCheckInstance;
 import org.index.patchdownloader.cli.instances.CliThreadsDecodeInstance;
@@ -65,6 +68,9 @@ public enum CliArg
     AKUMU_BACKOFF(CliAkumuBackoffInstance::new),
     SOURCE_COMPARE(CliSourceCompareInstance::new),
     SC_TRUST_PARTIAL(CliScTrustPartialInstance::new),
+    DOWNLOAD_MODE(CliDownloadModeInstance::new),
+    TEMP_FILE_THRESHOLD(CliTempThresholdInstance::new),
+    TEMP_FILE_DIR(CliTempDirInstance::new),
     ;
 
     private final ICliInstance _instance;

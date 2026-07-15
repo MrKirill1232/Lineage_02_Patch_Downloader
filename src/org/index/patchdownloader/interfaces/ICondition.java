@@ -40,7 +40,27 @@ public interface ICondition
                 return false;
             }
         }
-        return MainConfig.INCLUDE_FILE_FILTER != null && MainConfig.INCLUDE_FILE_FILTER.isEmpty();
+        // No condition matched. Include everything only when the run has NO effective include filter. Decide from
+        // the actual non-blank filter segments (not the raw string): a separator-only value like ";" is non-empty
+        // yet builds zero include conditions, so it must be treated as "no filter", not "reject everything".
+        return !includeFilterHasEntries();
+    }
+
+    private static boolean includeFilterHasEntries()
+    {
+        String filter = MainConfig.INCLUDE_FILE_FILTER;
+        if (filter == null)
+        {
+            return false;
+        }
+        for (String segment : filter.split(";"))
+        {
+            if (!segment.isBlank())
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static List<ICondition> loadConditions(GeneralLinkGenerator generalLinkGenerator)

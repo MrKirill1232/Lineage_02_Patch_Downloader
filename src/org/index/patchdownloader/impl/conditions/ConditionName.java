@@ -39,7 +39,10 @@ public class ConditionName implements ICondition
                 // remove interface.u and +1 is a "/" character
                 else
                 {
-                    _checkPath = filter.substring(0, (filter.length() - nameAndExt.length()) - 1).toLowerCase();
+                    // A leading-slash filter ("/interface.u") leaves an EMPTY path part here; treat it as
+                    // "no path" (null) rather than "", which check() would later feed to charAt(-1) and crash.
+                    String pathPart = filter.substring(0, (filter.length() - nameAndExt.length()) - 1);
+                    _checkPath = pathPart.isEmpty() ? null : pathPart.toLowerCase();
                 }
             }
             // in case if someone want to write "system/.file_name" (a leading-dot file):

@@ -4,6 +4,7 @@ import java.io.File;
 
 import git.index.configparser.annotations.ConfigParameterVariable;
 import org.index.patchdownloader.enums.CDNLink;
+import org.index.patchdownloader.enums.DownloadMode;
 
 /**
  * EN: Configuration holder — a POJO of public static fields annotated for the {@code ConfigFieldParser}
@@ -121,6 +122,17 @@ public class MainConfig
     @ConfigParameterVariable(parameterName = "akumu_retry_backoff_ms", defaultValue = "2000")
     public static int AKUMU_RETRY_BACKOFF_MS = 2000;
 
+    /**
+     * EN: Whole-exchange deadline (seconds) bounding a single HTTP download — headers AND body. It must exceed the
+     *     time a legitimate large file needs, so the flat default is generous (30 min) and configurable; a file
+     *     whose transfer would exceed it fails and retries. <br>
+     * RU: Дедлайн всего обмена (сек), ограничивающий одну HTTP-загрузку — заголовки И тело. Он должен превышать
+     *     время, нужное легитимному большому файлу, поэтому дефолт щедрый (30 мин) и настраиваемый; файл, чья
+     *     передача его превысит, падает и повторяется. <br>
+     **/
+    @ConfigParameterVariable(parameterName = "exchange_timeout_seconds", defaultValue = "1800")
+    public static int EXCHANGE_TIMEOUT_SECONDS = 1800;
+
     @ConfigParameterVariable(parameterName = "source_compare_path")
     public static File SOURCE_COMPARE_PATH = null;
 
@@ -132,6 +144,47 @@ public class MainConfig
 
     @ConfigParameterVariable(parameterName = "sc_trust_partial", defaultValue = "false")
     public static boolean SC_TRUST_PARTIAL = false;
+
+    @ConfigParameterVariable(parameterName = "download_mode", defaultValue = "ALL_MEMORY")
+    public static DownloadMode DOWNLOAD_MODE = DownloadMode.ALL_MEMORY;
+
+    @ConfigParameterVariable(parameterName = "temp_file_threshold_mb", defaultValue = "256")
+    public static int TEMP_FILE_THRESHOLD_MB = 256;
+
+    @ConfigParameterVariable(parameterName = "temp_file_dir")
+    public static File TEMP_FILE_DIR = null;
+
+    /**
+     * EN: Whether {@code temp_file_dir} was explicitly configured (vs. derived as {@code DOWNLOAD_PATH/.tmp}). Set
+     *     in {@link #onEndLoad()} and read by {@link #redriveTempFileDirAfterPathChange()} so a later CLI
+     *     {@code -path}/{@code -inner_path} override re-derives the temp dir under the new output path. <br>
+     * RU: Был ли {@code temp_file_dir} задан явно (в отличие от вывода как {@code DOWNLOAD_PATH/.tmp}). Ставится в
+     *     {@link #onEndLoad()} и читается {@link #redriveTempFileDirAfterPathChange()}, чтобы поздний CLI-override
+     *     {@code -path}/{@code -inner_path} пересчитал временный каталог под новым путём вывода. <br>
+     **/
+    public static boolean TEMP_FILE_DIR_EXPLICIT = false;
+
+    /**
+     * EN: Re-derives {@code temp_file_dir} as {@code DOWNLOAD_PATH/.tmp} under the CURRENT output path, but only
+     *     when it was not set explicitly ({@link #TEMP_FILE_DIR_EXPLICIT} is false). A CLI {@code -path} /
+     *     {@code -inner_path} override changes {@code DOWNLOAD_PATH} AFTER {@link #onEndLoad()} already derived the
+     *     temp dir from the old path, so both override handlers call this to re-pin the temp dir under the new
+     *     output — otherwise temp files (and the {@code .part} rename) would land on the old, possibly wrong,
+     *     volume. A no-op when the temp dir was configured explicitly. <br>
+     * RU: Заново вычисляет {@code temp_file_dir} как {@code DOWNLOAD_PATH/.tmp} под ТЕКУЩИМ путём вывода, но лишь
+     *     когда он не был задан явно ({@link #TEMP_FILE_DIR_EXPLICIT} равен false). CLI-override {@code -path} /
+     *     {@code -inner_path} меняет {@code DOWNLOAD_PATH} уже ПОСЛЕ того, как {@link #onEndLoad()} вывел временный
+     *     каталог из старого пути, поэтому оба обработчика вызывают этот метод, чтобы заново привязать временный
+     *     каталог к новому выводу — иначе временные файлы (и переименование {@code .part}) оказались бы на старом,
+     *     возможно неверном, томе. Пустая операция, если каталог задан явно. <br>
+     **/
+    public static void redriveTempFileDirAfterPathChange()
+    {
+        if (!TEMP_FILE_DIR_EXPLICIT)
+        {
+            TEMP_FILE_DIR = new File(DOWNLOAD_PATH, ".tmp");
+        }
+    }
 
     /**
      * EN: Post-load hook invoked by the library after all fields are parsed. Resolves the running path,
@@ -171,6 +224,23 @@ public class MainConfig
             UP_NOVA_LAUNCHER_PATCH_PATH = "PatchPath";
         }
 
+        // temp-file directory: default DOWNLOAD_PATH/.tmp (same volume as the output so a .part rename stays a
+        //     rename, not a cross-volume copy). An empty value falls back to the default; a relative value is
+        //     resolved against the (already absolute) download path; an absolute value is used as-is.
+        // временный каталог: по умолчанию DOWNLOAD_PATH/.tmp (тот же том, что и вывод, чтобы переименование
+        //     .part оставалось переименованием, а не копированием между томами). Пустое значение откатывается к
+        //     умолчанию; относительное значение разрешается относительно (уже абсолютного) пути загрузки;
+        //     абсолютное значение используется как есть.
+        TEMP_FILE_DIR_EXPLICIT = TEMP_FILE_DIR != null && !TEMP_FILE_DIR.getPath().isEmpty();
+        if (!TEMP_FILE_DIR_EXPLICIT)
+        {
+            TEMP_FILE_DIR = new File(DOWNLOAD_PATH, ".tmp");
+        }
+        else if (!TEMP_FILE_DIR.isAbsolute())
+        {
+            TEMP_FILE_DIR = new File(DOWNLOAD_PATH, TEMP_FILE_DIR.getPath());
+        }
+
         // source-compare root: an empty path disables the feature; a relative path is resolved against the run dir.
         if (SOURCE_COMPARE_PATH != null && SOURCE_COMPARE_PATH.getPath().isEmpty())
         {
@@ -192,9 +262,17 @@ public class MainConfig
         PARALLEL_PARTS_PER_FILE = Math.max(1, PARALLEL_PARTS_PER_FILE);
         SELF_SPLIT_MIN_MB = Math.max(0, SELF_SPLIT_MIN_MB);
         SELF_SPLIT_CHUNK_MB = Math.max(1, SELF_SPLIT_CHUNK_MB);
+        TEMP_FILE_THRESHOLD_MB = Math.max(1, TEMP_FILE_THRESHOLD_MB);
+        if (DOWNLOAD_MODE == null)
+        {
+            DOWNLOAD_MODE = DownloadMode.ALL_MEMORY;
+        }
 
+        EXCHANGE_TIMEOUT_SECONDS = Math.max(30, EXCHANGE_TIMEOUT_SECONDS);
         AKUMU_MAX_CONNECTIONS = Math.max(1, AKUMU_MAX_CONNECTIONS);
-        AKUMU_RETRY_BACKOFF_MS = Math.max(0, AKUMU_RETRY_BACKOFF_MS);
+        // A backoff base of 0 would disable the exponential-backoff half of the akumu politeness invariant
+        // (every retry delay becomes 0 ms). Reject <= 0 by falling back to the default instead of clamping to 0.
+        AKUMU_RETRY_BACKOFF_MS = AKUMU_RETRY_BACKOFF_MS > 0 ? AKUMU_RETRY_BACKOFF_MS : 2000;
         if (CDN_SOURCE == CDNLink.AKUMU)
         {
             // Akumu limits concurrent connections and runs an antibot: behave like one browser session.

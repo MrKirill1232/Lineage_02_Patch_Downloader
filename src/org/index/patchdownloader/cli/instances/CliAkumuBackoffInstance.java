@@ -37,7 +37,10 @@ public class CliAkumuBackoffInstance implements ICliInstance
             CliArgs.warn(arguments[currIndex], "requires a value.");
             return currIndex;
         }
-        MainConfig.AKUMU_RETRY_BACKOFF_MS = Math.max(0, CliArgs.parseInteger(value, MainConfig.AKUMU_RETRY_BACKOFF_MS));
+        // A backoff base of 0 disables the akumu backoff politeness half; a non-positive value falls back to the
+        // default (this override runs AFTER onEndLoad's clamp, so the floor must be re-applied here).
+        int parsed = CliArgs.parseInteger(value, MainConfig.AKUMU_RETRY_BACKOFF_MS);
+        MainConfig.AKUMU_RETRY_BACKOFF_MS = parsed > 0 ? parsed : 2000;
         CliArgs.logApplied(arguments[currIndex], MainConfig.AKUMU_RETRY_BACKOFF_MS);
         return currIndex + 1;
     }

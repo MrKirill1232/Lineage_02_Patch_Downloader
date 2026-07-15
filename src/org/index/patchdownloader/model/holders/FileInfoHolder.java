@@ -14,9 +14,9 @@ public class FileInfoHolder
     private final ArchiveType _compressType;
 
     private String          _fileHashSum;
-    private int             _fileLength ;
+    private long            _fileLength ;
     private String          _downloadDataHashSum;
-    private int             _downloadDataLength;
+    private long            _downloadDataLength;
 
     private final FileInfoHolder[] _separatedParts;
 
@@ -78,12 +78,12 @@ public class FileInfoHolder
         _fileHashSum = fileHashSum;
     }
 
-    public int getFileLength()
+    public long getFileLength()
     {
         return _fileLength;
     }
 
-    public void setFileLength(int fileLength)
+    public void setFileLength(long fileLength)
     {
         _fileLength = fileLength;
     }
@@ -98,12 +98,12 @@ public class FileInfoHolder
         _downloadDataHashSum = downloadDataHashSum;
     }
 
-    public int getDownloadDataLength()
+    public long getDownloadDataLength()
     {
         return _downloadDataLength;
     }
 
-    public void setDownloadDataLength(int downloadDataLength)
+    public void setDownloadDataLength(long downloadDataLength)
     {
         _downloadDataLength = downloadDataLength;
     }

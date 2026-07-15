@@ -10,9 +10,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.index.patchdownloader.interfaces.IDummyLogger;
 import org.index.patchdownloader.interfaces.IPipelineSink;
-import org.index.patchdownloader.model.pipeline.FileDownloadTask;
 import org.index.patchdownloader.model.pipeline.enums.DownloadFailureType;
 import org.index.patchdownloader.model.pipeline.enums.TaskStage;
+import org.index.patchdownloader.model.pipeline.request.AbstractFileRequest;
 import org.index.patchdownloader.model.pipeline.retry.IRetryHandler;
 import org.index.patchdownloader.util.concurrent.PipelineExecutors;
 
@@ -42,7 +42,7 @@ public abstract class AbstractStageManager
         STOPPED
     }
 
-    protected final Queue<FileDownloadTask> _queue;
+    protected final Queue<AbstractFileRequest> _queue;
     protected final AtomicInteger _inFlight;
     protected final IRetryHandler _retryHandler;
 
@@ -129,7 +129,7 @@ public abstract class AbstractStageManager
      * ==================================================================<br>
      * EN: @param task the task to enqueue / RU: @param task задача для постановки в очередь <br>
      **/
-    public void submit(FileDownloadTask task)
+    public void submit(AbstractFileRequest task)
     {
         _queue.add(task);
         pump();
@@ -149,7 +149,7 @@ public abstract class AbstractStageManager
             {
                 break;
             }
-            FileDownloadTask task = _queue.poll();
+            AbstractFileRequest task = _queue.poll();
             if (task == null)
             {
                 // Release the phantom slot, then re-check: a concurrent submit() may have enqueued a
@@ -178,7 +178,7 @@ public abstract class AbstractStageManager
      * ==================================================================<br>
      * EN: @param task the task to process / RU: @param task обрабатываемая задача <br>
      **/
-    private void runProcess(FileDownloadTask task)
+    private void runProcess(AbstractFileRequest task)
     {
         try
         {
@@ -235,7 +235,7 @@ public abstract class AbstractStageManager
      * EN: @param task the finished task / RU: @param task завершённая задача <br>
      * EN: @param throwable the failure (or null on success) / RU: @param throwable сбой (или null при успехе) <br>
      **/
-    private void onResult(FileDownloadTask task, Throwable throwable)
+    private void onResult(AbstractFileRequest task, Throwable throwable)
     {
         releaseSlot();
         _sinkReported.set(Boolean.FALSE);
@@ -283,7 +283,7 @@ public abstract class AbstractStageManager
      * ==================================================================<br>
      * EN: @param task the task to force-fail / RU: @param task задача для принудительного FAILED <br>
      **/
-    private void forceFail(FileDownloadTask task)
+    private void forceFail(AbstractFileRequest task)
     {
         try
         {
@@ -308,7 +308,7 @@ public abstract class AbstractStageManager
      * ==================================================================<br>
      * EN: @param task the successful task / RU: @param task успешная задача <br>
      **/
-    protected void onSuccess(FileDownloadTask task)
+    protected void onSuccess(AbstractFileRequest task)
     {
         task.advanceStage();
         AbstractStageManager next = _next;
@@ -333,7 +333,7 @@ public abstract class AbstractStageManager
      * EN: @param task the failed task / RU: @param task проваленная задача <br>
      * EN: @param throwable the (unwrapped) failure cause / RU: @param throwable (развёрнутая) причина сбоя <br>
      **/
-    protected void onFailure(FileDownloadTask task, Throwable throwable)
+    protected void onFailure(AbstractFileRequest task, Throwable throwable)
     {
         DownloadFailureType failure = classify(throwable);
         if (_retryHandler.shouldRetry(task, failure))
@@ -423,7 +423,7 @@ public abstract class AbstractStageManager
      * ==================================================================<br>
      * EN: @param task the task to process / RU: @param task обрабатываемая задача <br>
      **/
-    protected abstract void processTask(FileDownloadTask task) throws Exception;
+    protected abstract void processTask(AbstractFileRequest task) throws Exception;
 
     /**
      * EN: The stage identity, used in logging and routing. <br>

@@ -217,4 +217,23 @@ public interface IXmlParser
     {
         return FieldParserManager.getInstance().applyParserFromClass(Integer.class).parseValue(childText(parent, childName), new FieldClassRef<>(Integer.class), defaultValue);
     }
+
+    /**
+     * EN: Reads a child element's text as a {@code long} through the shared {@link FieldParserManager},
+     *     returning {@code defaultValue} when the child is absent or not a number. Unlike
+     *     {@link #parseInteger}, it keeps sizes at or above two gigabytes intact instead of overflowing. <br>
+     * RU: Читает текст дочернего элемента как {@code long} через общий {@link FieldParserManager},
+     *     возвращая {@code defaultValue}, если ребёнка нет или это не число. В отличие от
+     *     {@link #parseInteger}, сохраняет размеры от двух гигабайт и выше без переполнения. <br>
+     * ==================================================================<br>
+     * EN: @param parent the parent element / RU: @param parent родительский элемент <br>
+     * EN: @param childName the child tag name / RU: @param childName имя дочернего тега <br>
+     * EN: @param defaultValue value when absent / not a number / RU: @param defaultValue значение при отсутствии/невалидности <br>
+     * @return <br>
+     *         {long} - EN: the parsed long / RU: разобранный long <br>
+     **/
+    static long parseLong(Element parent, String childName, long defaultValue)
+    {
+        return FieldParserManager.getInstance().applyParserFromClass(Long.class).parseValue(childText(parent, childName), new FieldClassRef<>(Long.class), defaultValue);
+    }
 }

@@ -17,9 +17,9 @@ public enum TaskStage
 
     /**
      * EN: Returns the next stage in the linear pipeline order, or {@code COMPLETE} when already at
-     *     the end. Used by {@code FileDownloadTask.advanceStage()}. <br>
+     *     the end. Used by {@code AbstractFileRequest.advanceStage()}. <br>
      * RU: Возвращает следующую стадию в линейном порядке конвейера либо {@code COMPLETE}, если уже
-     *     в конце. Используется в {@code FileDownloadTask.advanceStage()}. <br>
+     *     в конце. Используется в {@code AbstractFileRequest.advanceStage()}. <br>
      * @return <br>
      *         {TaskStage} - EN: the next stage (clamped to COMPLETE) / RU: следующая стадия (не выше COMPLETE) <br>
      **/

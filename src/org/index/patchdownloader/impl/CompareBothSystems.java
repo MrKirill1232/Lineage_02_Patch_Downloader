@@ -37,9 +37,20 @@ public class CompareBothSystems
             {
                 notComparedFiles.computeIfAbsent(("WRONG_FILE_SIZE"), v -> new HashSet<>()).add(patchKey);
             }
-            else if (!getHashSum(hashType, fileOfFsystem).equalsIgnoreCase(getHashSum(hashType, fileOfSsystem)))
+            else
             {
-                notComparedFiles.computeIfAbsent(("WRONG_HASHSUM"), v -> new HashSet<>()).add(patchKey);
+                String hashFirst = getHashSum(hashType, fileOfFsystem);
+                String hashSecond = getHashSum(hashType, fileOfSsystem);
+                if (hashFirst == null || hashSecond == null)
+                {
+                    // A null hash means the file could not be read / no algorithm — it is NOT a proof of equality.
+                    // Report it separately instead of comparing empty strings (which would falsely pass).
+                    notComparedFiles.computeIfAbsent(("READ_ERROR"), v -> new HashSet<>()).add(patchKey);
+                }
+                else if (!hashFirst.equalsIgnoreCase(hashSecond))
+                {
+                    notComparedFiles.computeIfAbsent(("WRONG_HASHSUM"), v -> new HashSet<>()).add(patchKey);
+                }
             }
         }
 
@@ -77,12 +88,11 @@ public class CompareBothSystems
         IHashingAlgorithm hashingAlgorithm = HashingManager.getAvailableHashingAlgorithm(hashType, false);
         if (hashingAlgorithm == null)
         {
-            return "";
+            return null;
         }
-        // calculateHash(File) may return null on a read failure (per the IHashingAlgorithm contract); an
-        // unreadable file has no comparable hash, so treat it as an empty string.
-        String hash = hashingAlgorithm.calculateHash(file);
-        return hash == null ? "" : hash;
+        // calculateHash(File) returns null on a read failure (per the IHashingAlgorithm contract). Propagate the
+        // null — an unreadable file has NO comparable hash, and the caller must not treat that as a match.
+        return hashingAlgorithm.calculateHash(file);
     }
 
     public static void main(String[] args)

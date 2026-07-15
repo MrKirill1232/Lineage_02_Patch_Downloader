@@ -1,15 +1,16 @@
 package org.index.patchdownloader.model.pipeline.download;
 
+import java.io.IOException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.index.patchdownloader.config.configs.MainConfig;
+import org.index.patchdownloader.interfaces.IDownloadRequest;
 import org.index.patchdownloader.interfaces.IDummyLogger;
 import org.index.patchdownloader.model.holders.FileInfoHolder;
 import org.index.patchdownloader.model.holders.LinkInfoHolder;
-import org.index.patchdownloader.model.pipeline.FileDownloadTask;
 import org.index.patchdownloader.model.pipeline.HttpStatusException;
 
 /**
@@ -32,44 +33,77 @@ public class CdnPartsDownloadStrategy extends AbstractDownloadStrategy
      * EN: Applies when the CDN split the file into parts. <br>
      * RU: Применяется, когда CDN разбил файл на части. <br>
      * ==================================================================<br>
-     * EN: @param task the task / RU: @param task задача <br>
+     * EN: @param request the request / RU: @param request запрос <br>
      * @return <br>
      *         {true}  - EN: file has CDN parts / RU: у файла есть части CDN <br>
      *         {false} - EN: not a multi-part file / RU: не многочастный файл <br>
      **/
     @Override
-    public boolean supports(FileDownloadTask task)
+    public boolean supports(IDownloadRequest request)
     {
-        return task.getFileInfo().getAllSeparatedParts().length > 0;
+        return request.fileInfo().getAllSeparatedParts().length > 0;
     }
 
     /**
-     * EN: Fetches all CDN parts concurrently and stores each into its slot. <br>
-     * RU: Качает все части CDN параллельно и кладёт каждую в свой слот. <br>
+     * EN: Fetches all CDN parts concurrently, streaming each part's body straight into its own slot as it
+     *     arrives (never buffering a whole part into a single {@code byte[]}), then signals the whole raw
+     *     payload received. Each part's chunks arrive in order over its one connection, so an in-memory slot's
+     *     sequential append reconstructs the part exactly; a non-200 part fails the whole file so it retries as
+     *     a unit. <br>
+     * RU: Качает все части CDN параллельно, потоково записывая тело каждой части прямо в её слот по мере
+     *     поступления (никогда не буферизуя целую часть в один {@code byte[]}), затем сигнализирует о полном
+     *     получении сырых данных. Куски каждой части приходят по порядку по её единственному соединению,
+     *     поэтому последовательная дозапись в слот в памяти точно восстанавливает часть; не-200 часть
+     *     проваливает весь файл, чтобы он повторился целиком. <br>
      * ==================================================================<br>
-     * EN: @param task the task to download / RU: @param task задача для загрузки <br>
+     * EN: @param request the request to download / RU: @param request запрос для загрузки <br>
      **/
     @Override
-    protected void doDownload(FileDownloadTask task) throws Exception
+    protected void doDownload(IDownloadRequest request) throws Exception
     {
-        FileInfoHolder[] parts = task.getFileInfo().getAllSeparatedParts();
+        FileInfoHolder[] parts = request.fileInfo().getAllSeparatedParts();
         List<HttpRequest> requests = new ArrayList<>(parts.length);
         for (FileInfoHolder part : parts)
         {
             requests.add(buildRequest(part.getAccessLink()));
         }
-        IDummyLogger.log(IDummyLogger.INFO, "CDN parts: " + parts.length + " parts (cap " + MainConfig.PARALLEL_PARTS_PER_FILE + ") for '" + task.getLinkPath() + "'.");
-        fetchConcurrently(requests, MainConfig.PARALLEL_PARTS_PER_FILE, (index, response) ->
+        IDummyLogger.log(IDummyLogger.INFO, "CDN parts: " + parts.length + " parts (cap " + MainConfig.PARALLEL_PARTS_PER_FILE + ") for '" + request.fileInfo().getLinkPath() + "'.");
+        long epoch = request.downloadEpoch();
+        fetchConcurrently(requests, MainConfig.PARALLEL_PARTS_PER_FILE, new StreamHandler()
         {
-            LinkInfoHolder link = parts[index].getAccessLink();
-            byte[] body = response.body() == null ? new byte[0] : response.body();
-            link.setHttpStatus(response.statusCode());
-            link.setHttpLength(body.length);
-            if (response.statusCode() != 200)
+            @Override
+            public ChunkSink sink(int index)
             {
-                throw new HttpStatusException(response.statusCode());
+                return (offset, chunk) -> request.acceptChunk(epoch, index, offset, chunk);
             }
-            task.addDownloadedPart(index, body);
+
+            @Override
+            public boolean streamStatus(int index, int statusCode)
+            {
+                return statusCode == 200;
+            }
+
+            @Override
+            public void settled(int index, int statusCode, long bytesStreamed) throws Exception
+            {
+                LinkInfoHolder link = parts[index].getAccessLink();
+                link.setHttpStatus(statusCode);
+                link.setHttpLength(bytesStreamed);
+                if (statusCode != 200)
+                {
+                    throw new HttpStatusException(statusCode);
+                }
+                // Reconcile received vs the list-declared part length: a stale list where the server serves a
+                // different size (its own Content-Length matches, so HTTP is happy) would place the next part at the
+                // wrong offset in temp mode. Fail (retryable) instead of storing a shifted/gapped file.
+                long declared = parts[index].getDownloadDataLength();
+                if (declared > 0 && bytesStreamed != declared)
+                {
+                    throw new IOException("CDN part " + index + " of '" + request.fileInfo().getLinkPath() + "' returned " + bytesStreamed + " bytes, list declared " + declared + " (stale file list); failing to avoid a shifted file, will retry.");
+                }
+                request.partComplete(index);
+            }
         });
+        request.downloadComplete();
     }
 }

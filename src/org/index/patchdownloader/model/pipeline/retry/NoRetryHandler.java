@@ -1,7 +1,7 @@
 package org.index.patchdownloader.model.pipeline.retry;
 
 import org.index.patchdownloader.instancemanager.AbstractStageManager;
-import org.index.patchdownloader.model.pipeline.FileDownloadTask;
+import org.index.patchdownloader.model.pipeline.request.AbstractFileRequest;
 import org.index.patchdownloader.model.pipeline.enums.DownloadFailureType;
 
 /**
@@ -30,7 +30,7 @@ public final class NoRetryHandler implements IRetryHandler
      *         {false} - EN: never retry / RU: никогда не повторять <br>
      **/
     @Override
-    public boolean shouldRetry(FileDownloadTask task, DownloadFailureType failure)
+    public boolean shouldRetry(AbstractFileRequest task, DownloadFailureType failure)
     {
         return false;
     }
@@ -44,7 +44,7 @@ public final class NoRetryHandler implements IRetryHandler
      * EN: @param owner the owning stage / RU: @param owner владеющая стадия <br>
      **/
     @Override
-    public void onRetry(FileDownloadTask task, DownloadFailureType failure, AbstractStageManager owner)
+    public void onRetry(AbstractFileRequest task, DownloadFailureType failure, AbstractStageManager owner)
     {
         // no-op: shouldRetry() is always false for this handler
     }

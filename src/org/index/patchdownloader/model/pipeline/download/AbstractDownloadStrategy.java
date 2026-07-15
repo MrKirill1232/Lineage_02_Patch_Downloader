@@ -1,43 +1,52 @@
 package org.index.patchdownloader.model.pipeline.download;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Flow;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.IntPredicate;
 
 import org.index.patchdownloader.config.configs.MainConfig;
+import org.index.patchdownloader.interfaces.IDownloadRequest;
 import org.index.patchdownloader.model.holders.LinkInfoHolder;
-import org.index.patchdownloader.model.pipeline.FileDownloadTask;
 import org.index.patchdownloader.model.pipeline.HttpStatusException;
 import org.index.patchdownloader.util.concurrent.PipelineExecutors;
 
 /**
- * EN: Base of the download-strategy family. A single {@link FileDownloadTask} is fetched by exactly one
- *     strategy, chosen by {@link #supports(FileDownloadTask)} (first match wins). The concrete work lives
- *     in {@link #doDownload(FileDownloadTask)}, which the {@code final} {@link #download} wraps in one
+ * EN: Base of the download-strategy family. A single {@link IDownloadRequest} is fetched by exactly one
+ *     strategy, chosen by {@link #supports(IDownloadRequest)} (first match wins). The concrete work lives
+ *     in {@link #doDownload(IDownloadRequest)}, which the {@code final} {@link #download} wraps in one
  *     {@link java.util.concurrent.ForkJoinPool.ManagedBlocker} so the stage pool stays accounted while the
  *     worker blocks on I/O. Shared HTTP helpers (plain GET, ranged GET, whole-exchange timeout, bounded
- *     parallel fetch) live here so each strategy only expresses WHAT to fetch.<br>
- * RU: База семейства стратегий загрузки. Одна {@link FileDownloadTask} скачивается ровно одной стратегией,
- *     выбранной {@link #supports(FileDownloadTask)} (побеждает первое совпадение). Конкретная работа — в
- *     {@link #doDownload(FileDownloadTask)}, которую {@code final} {@link #download} оборачивает в один
+ *     parallel fetch) live here so each strategy only expresses WHAT to fetch. The strategy streams the raw
+ *     bytes into the request through {@link IDownloadRequest} instead of returning a whole {@code byte[]}.<br>
+ * RU: База семейства стратегий загрузки. Один {@link IDownloadRequest} скачивается ровно одной стратегией,
+ *     выбранной {@link #supports(IDownloadRequest)} (побеждает первое совпадение). Конкретная работа — в
+ *     {@link #doDownload(IDownloadRequest)}, которую {@code final} {@link #download} оборачивает в один
  *     {@link java.util.concurrent.ForkJoinPool.ManagedBlocker}, чтобы пул стадии корректно учитывался, пока
  *     воркер ждёт I/O. Общие HTTP-хелперы (обычный GET, GET с диапазоном, таймаут всего обмена,
- *     ограниченная параллельная загрузка) — здесь, поэтому стратегия выражает только ЧТО скачивать.<br>
+ *     ограниченная параллельная загрузка) — здесь, поэтому стратегия выражает только ЧТО скачивать. Стратегия
+ *     потоково пишет сырые байты в запрос через {@link IDownloadRequest}, а не возвращает целый {@code byte[]}.<br>
  **/
 public abstract class AbstractDownloadStrategy
 {
     protected static final Duration REQUEST_TIMEOUT = Duration.ofMinutes(1);
-    protected static final long EXCHANGE_TIMEOUT_SECONDS = 300;
+    // Configurable whole-exchange deadline (default 30 min), captured at class-load — which happens after the
+    // config (incl. CLI) is applied — so a legitimately large file is no longer capped at a flat 5 minutes.
+    protected static final long EXCHANGE_TIMEOUT_SECONDS = MainConfig.EXCHANGE_TIMEOUT_SECONDS;
     protected static final long ONE_MB = 1024L * 1024L;
 
     protected final HttpClient _httpClient;
@@ -53,35 +62,35 @@ public abstract class AbstractDownloadStrategy
      * RU: Может ли эта стратегия обработать задачу (проверяется по приоритету; стратегия одиночного GET —
      *     всегда-истинный запасной вариант). <br>
      * ==================================================================<br>
-     * EN: @param task the task to classify / RU: @param task классифицируемая задача <br>
+     * EN: @param request the request to classify / RU: @param request классифицируемый запрос <br>
      * @return <br>
      *         {true}  - EN: this strategy applies / RU: стратегия применима <br>
      *         {false} - EN: try the next strategy / RU: пробовать следующую стратегию <br>
      **/
-    public abstract boolean supports(FileDownloadTask task);
+    public abstract boolean supports(IDownloadRequest request);
 
     /**
-     * EN: Downloads the task's bytes into its part slots, wrapped in a single {@code ManagedBlocker}. <br>
-     * RU: Скачивает байты задачи в её слоты частей, обёрнуто в один {@code ManagedBlocker}. <br>
+     * EN: Streams the request's raw bytes into its part slots, wrapped in a single {@code ManagedBlocker}. <br>
+     * RU: Потоково пишет сырые байты запроса в его слоты частей, обёрнуто в один {@code ManagedBlocker}. <br>
      * ==================================================================<br>
-     * EN: @param task the task to download / RU: @param task задача для загрузки <br>
+     * EN: @param request the request to download / RU: @param request запрос для загрузки <br>
      **/
-    public final void download(FileDownloadTask task) throws Exception
+    public final void download(IDownloadRequest request) throws Exception
     {
         PipelineExecutors.managedBlock(() ->
         {
-            doDownload(task);
+            doDownload(request);
             return Boolean.TRUE;
         });
     }
 
     /**
-     * EN: Strategy-specific download body (already inside a {@code ManagedBlocker}); fills the task's parts. <br>
-     * RU: Специфичное тело загрузки стратегии (уже внутри {@code ManagedBlocker}); заполняет части задачи. <br>
+     * EN: Strategy-specific download body (already inside a {@code ManagedBlocker}); streams into the request's parts. <br>
+     * RU: Специфичное тело загрузки стратегии (уже внутри {@code ManagedBlocker}); пишет в части запроса потоково. <br>
      * ==================================================================<br>
-     * EN: @param task the task to download / RU: @param task задача для загрузки <br>
+     * EN: @param request the request to download / RU: @param request запрос для загрузки <br>
      **/
-    protected abstract void doDownload(FileDownloadTask task) throws Exception;
+    protected abstract void doDownload(IDownloadRequest request) throws Exception;
 
     /**
      * EN: Builds a plain GET for the given link with the configured timeout and optional User-Agent. <br>
@@ -122,32 +131,37 @@ public abstract class AbstractDownloadStrategy
     }
 
     /**
-     * EN: Sends a request asynchronously and blocks up to a whole-exchange deadline (headers AND body). Any
-     *     NON-success exit cancels the future so we never abandon a still-running exchange that keeps buffering
-     *     the body into memory. Two exit paths reach a still-running future: a <b>timeout</b> (a stalled body —
-     *     surfaces as a retryable {@code TimeoutException}) and an <b>interrupt</b> ({@code cancel} aborts the
-     *     exchange and the interrupt flag is restored). A mid-request <b>disconnect / transport error</b>
-     *     instead completes the future exceptionally (an {@code ExecutionException} wrapping the
-     *     {@code IOException}); that is already memory-safe — the errored body subscriber has released its
-     *     buffers — and is classified downstream as a retryable transport failure, so here {@code cancel} is a
-     *     harmless no-op on an already-finished future. <br>
-     * RU: Отправляет запрос асинхронно и блокируется до дедлайна всего обмена (заголовки И тело). Любой
-     *     НЕ-успешный выход отменяет future, чтобы мы никогда не бросали ещё выполняющийся обмен, который
-     *     продолжает копить тело в память. Ещё выполняющийся future дают два пути: <b>таймаут</b> (зависшее
-     *     тело — становится повторяемым {@code TimeoutException}) и <b>прерывание</b> ({@code cancel} отменяет
-     *     обмен, флаг прерывания восстанавливается). Разрыв соединения / <b>ошибка транспорта</b> в середине
-     *     запроса вместо этого завершает future с исключением ({@code ExecutionException}, оборачивающим
-     *     {@code IOException}); это уже безопасно по памяти — ошибочный подписчик тела освободил буферы — и
-     *     классифицируется ниже как повторяемый сбой транспорта, поэтому здесь {@code cancel} — безвредный
-     *     no-op на уже завершённом future. <br>
+     * EN: Sends a request asynchronously with the given body handler and blocks up to a whole-exchange
+     *     deadline (headers AND body). Because the body handler here is the streaming subscriber, whose body
+     *     future only completes once every chunk has been consumed, the deadline still bounds the WHOLE
+     *     exchange, not merely the headers. Any NON-success exit cancels the future so we never abandon a
+     *     still-running exchange that keeps pulling bytes: a <b>timeout</b> (a stalled body — surfaces as a
+     *     retryable {@code TimeoutException}) and an <b>interrupt</b> ({@code cancel} aborts the exchange and
+     *     the interrupt flag is restored). A mid-request <b>disconnect / transport error</b> instead completes
+     *     the future exceptionally (an {@code ExecutionException} wrapping the {@code IOException}); that is
+     *     already memory-safe — the errored subscriber released its buffers — and is classified downstream as a
+     *     retryable transport failure, so here {@code cancel} is a harmless no-op on an already-finished
+     *     future. <br>
+     * RU: Отправляет запрос асинхронно с указанным обработчиком тела и блокируется до дедлайна всего обмена
+     *     (заголовки И тело). Поскольку обработчик тела здесь — потоковый подписчик, чей future тела
+     *     завершается только после потребления каждого куска, дедлайн по-прежнему ограничивает ВЕСЬ обмен, а
+     *     не только заголовки. Любой НЕ-успешный выход отменяет future, чтобы мы никогда не бросали ещё
+     *     выполняющийся обмен, продолжающий тянуть байты: <b>таймаут</b> (зависшее тело — становится
+     *     повторяемым {@code TimeoutException}) и <b>прерывание</b> ({@code cancel} отменяет обмен, флаг
+     *     прерывания восстанавливается). Разрыв соединения / <b>ошибка транспорта</b> в середине запроса вместо
+     *     этого завершает future с исключением ({@code ExecutionException}, оборачивающим {@code IOException});
+     *     это уже безопасно по памяти — ошибочный подписчик освободил буферы — и классифицируется ниже как
+     *     повторяемый сбой транспорта, поэтому здесь {@code cancel} — безвредный no-op на уже завершённом
+     *     future. <br>
      * ==================================================================<br>
      * EN: @param request the request / RU: @param request запрос <br>
+     * EN: @param bodyHandler the body handler / RU: @param bodyHandler обработчик тела <br>
      * @return <br>
-     *         {HttpResponse} - EN: the response with byte-array body / RU: ответ с телом-массивом байтов <br>
+     *         {HttpResponse} - EN: the settled response / RU: завершённый ответ <br>
      **/
-    protected HttpResponse<byte[]> sendWithExchangeTimeout(HttpRequest request) throws Exception
+    protected <T> HttpResponse<T> sendWithExchangeTimeout(HttpRequest request, HttpResponse.BodyHandler<T> bodyHandler) throws Exception
     {
-        CompletableFuture<HttpResponse<byte[]>> future = _httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray());
+        CompletableFuture<HttpResponse<T>> future = _httpClient.sendAsync(request, bodyHandler);
         try
         {
             return future.get(EXCHANGE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -164,64 +178,94 @@ public abstract class AbstractDownloadStrategy
     }
 
     /**
-     * EN: Single blocking GET: records status/length on the link holder and returns the body; raises
-     *     {@link HttpStatusException} on a non-200. <br>
-     * RU: Один блокирующий GET: записывает статус/длину в holder ссылки и возвращает тело; бросает
-     *     {@link HttpStatusException} на не-200. <br>
+     * EN: A body handler that streams the response body straight into a {@link ChunkSink} as it arrives,
+     *     instead of buffering a whole {@code byte[]}. The sink is attached only when {@code streamStatus}
+     *     accepts the response status; on any other status the body is drained and discarded (so the connection
+     *     is freed and the byte count is still known) and the caller decides how to react to the status. The
+     *     resolved body value is the number of body bytes seen. <br>
+     * RU: Обработчик тела, который потоково пишет тело ответа прямо в {@link ChunkSink} по мере поступления,
+     *     а не буферизует целый {@code byte[]}. Приёмник подключается, только когда {@code streamStatus}
+     *     принимает статус ответа; при любом другом статусе тело вычитывается и отбрасывается (чтобы соединение
+     *     освободилось, а число байтов всё равно было известно), и вызывающий сам решает, как реагировать на
+     *     статус. Итоговое значение тела — число увиденных байтов тела. <br>
+     * ==================================================================<br>
+     * EN: @param streamStatus which statuses feed the sink / RU: @param streamStatus какие статусы кормят приёмник <br>
+     * EN: @param sink the destination of the streamed chunks / RU: @param sink назначение потоковых кусков <br>
+     * @return <br>
+     *         {HttpResponse.BodyHandler} - EN: the streaming body handler / RU: потоковый обработчик тела <br>
+     **/
+    protected HttpResponse.BodyHandler<Long> streamingHandler(IntPredicate streamStatus, ChunkSink sink)
+    {
+        return responseInfo -> new StreamingBodySubscriber(streamStatus.test(responseInfo.statusCode()) ? sink : null);
+    }
+
+    /**
+     * EN: Single blocking GET streamed into the given sink: records the real status/length on the link holder
+     *     and raises {@link HttpStatusException} on a non-200. Only a {@code 200} body is fed to the sink; a
+     *     non-200 body is drained and discarded (its bytes never reach the sink) before the status is thrown. <br>
+     * RU: Один блокирующий GET, потоково записанный в приёмник: фиксирует реальный статус/длину в holder ссылки
+     *     и бросает {@link HttpStatusException} на не-200. В приёмник попадает только тело {@code 200}; тело
+     *     не-200 вычитывается и отбрасывается (его байты не доходят до приёмника) до того, как бросается
+     *     статус. <br>
      * ==================================================================<br>
      * EN: @param linkInfo the link holder / RU: @param linkInfo holder ссылки <br>
+     * EN: @param sink the destination of the streamed bytes / RU: @param sink назначение потоковых байтов <br>
      * @return <br>
-     *         {byte[]} - EN: the body bytes / RU: байты тела <br>
+     *         {long} - EN: the number of body bytes / RU: число байтов тела <br>
      **/
-    protected byte[] fetchOne(LinkInfoHolder linkInfo) throws Exception
+    protected long streamOne(LinkInfoHolder linkInfo, ChunkSink sink) throws Exception
     {
-        HttpResponse<byte[]> response = sendWithExchangeTimeout(buildRequest(linkInfo));
-        byte[] body = response.body() == null ? new byte[0] : response.body();
+        HttpResponse<Long> response = sendWithExchangeTimeout(buildRequest(linkInfo), streamingHandler(status -> status == 200, sink));
+        long count = response.body() == null ? 0L : response.body();
         linkInfo.setHttpStatus(response.statusCode());
-        linkInfo.setHttpLength(body.length);
+        linkInfo.setHttpLength(count);
         if (response.statusCode() != 200)
         {
             throw new HttpStatusException(response.statusCode());
         }
-        return body;
+        return count;
     }
 
     /**
      * EN: Fetches all requests concurrently, at most {@code cap} in flight — a {@link Semaphore} acquired
      *     before each launch and released when that response settles (via {@code handle}, so the permit is
-     *     freed on a transport error too, not only on success). Each response invokes {@code handler} on the
-     *     HTTP-client thread (must be thread-safe). The batch is awaited within one whole-exchange deadline;
-     *     the FIRST transport or handler error is captured (into an {@link AtomicReference}, so every request
-     *     still settles and frees its permit) and rethrown once the batch has drained. Any NON-success exit —
-     *     a deadline {@code TimeoutException} OR an interrupt while submitting/awaiting — cancels every
-     *     underlying exchange (the raw {@code sendAsync} futures, NOT the derived {@code handle} stages:
+     *     freed on a transport error too, not only on success). Each response's body is streamed straight into
+     *     the {@link StreamHandler}'s per-index {@link ChunkSink} on the HTTP-client thread (so the sink must be
+     *     thread-safe for disjoint targets), and {@link StreamHandler#settled} is invoked once it has fully
+     *     drained (also on the client thread). The batch is awaited within one whole-exchange deadline; the
+     *     FIRST transport or handler error is captured (into an {@link AtomicReference}, so every request still
+     *     settles and frees its permit) and rethrown once the batch has drained. Any NON-success exit — a
+     *     deadline {@code TimeoutException} OR an interrupt while submitting/awaiting — cancels every underlying
+     *     exchange (the raw {@code sendAsync} futures, NOT the derived {@code handle} stages:
      *     {@link CompletableFuture} cancellation does not propagate upstream, so cancelling the handle stage
-     *     would leave the download running and buffering) so none keeps buffering its body in the background,
-     *     and restores the interrupt flag. This is non-blocking (cancel never blocks; the gate is a local
-     *     per-call semaphore nothing else waits on), so the caller unwinds immediately — no deadlock. <br>
+     *     would leave the download running and streaming) so none keeps pulling its body in the background, and
+     *     restores the interrupt flag. This is non-blocking (cancel never blocks; the gate is a local per-call
+     *     semaphore nothing else waits on), so the caller unwinds immediately — no deadlock. <br>
      * RU: Качает все запросы параллельно, не более {@code cap} одновременно — {@link Semaphore} занимается
      *     перед каждым запуском и освобождается, когда этот ответ завершился (через {@code handle}, поэтому
-     *     квота освобождается и при ошибке транспорта, а не только при успехе). Каждый ответ вызывает
-     *     {@code handler} в потоке HTTP-клиента (должен быть потокобезопасным). Партия ожидается в пределах
-     *     одного дедлайна всего обмена; ПЕРВАЯ ошибка транспорта или обработчика захватывается (в
+     *     квота освобождается и при ошибке транспорта, а не только при успехе). Тело каждого ответа потоково
+     *     пишется прямо в {@link ChunkSink} нужного индекса из {@link StreamHandler} в потоке HTTP-клиента
+     *     (поэтому приёмник должен быть потокобезопасен для непересекающихся целей), а {@link StreamHandler#settled}
+     *     вызывается после полного вычитывания (тоже в потоке клиента). Партия ожидается в пределах одного
+     *     дедлайна всего обмена; ПЕРВАЯ ошибка транспорта или обработчика захватывается (в
      *     {@link AtomicReference}, поэтому каждый запрос всё равно завершается и освобождает квоту) и
      *     перебрасывается после осушения партии. Любой НЕ-успешный выход — {@code TimeoutException} по дедлайну
      *     ИЛИ прерывание во время отправки/ожидания — отменяет каждый нижележащий обмен (сырые
      *     {@code sendAsync}-futures, а НЕ производные стадии {@code handle}: отмена {@link CompletableFuture} не
-     *     распространяется вверх, поэтому отмена стадии handle оставила бы загрузку работающей и копящей тело),
-     *     чтобы ни один не копил тело в фоне, и восстанавливает флаг прерывания. Это неблокирующе (cancel
-     *     никогда не блокирует; gate — локальный семафор на вызов, которого никто больше не ждёт), поэтому
-     *     вызывающий код сразу возвращает управление (раскрутка стека) — без deadlock. <br>
+     *     распространяется вверх, поэтому отмена стадии handle оставила бы загрузку работающей и потоково
+     *     тянущей тело), чтобы ни один не тянул тело в фоне, и восстанавливает флаг прерывания. Это неблокирующе
+     *     (cancel никогда не блокирует; gate — локальный семафор на вызов, которого никто больше не ждёт),
+     *     поэтому вызывающий код сразу возвращает управление (раскрутка стека) — без deadlock. <br>
      * ==================================================================<br>
      * EN: @param requests the requests to run / RU: @param requests запросы для выполнения <br>
      * EN: @param cap max concurrent requests / RU: @param cap максимум одновременных запросов <br>
-     * EN: @param handler per-response callback / RU: @param handler колбэк на каждый ответ <br>
+     * EN: @param handler per-index sink + settle callback / RU: @param handler приёмник по индексу + колбэк завершения <br>
      **/
-    protected void fetchConcurrently(List<HttpRequest> requests, int cap, PartHandler handler) throws Exception
+    protected void fetchConcurrently(List<HttpRequest> requests, int cap, StreamHandler handler) throws Exception
     {
         Semaphore gate = new Semaphore(Math.max(1, cap));
         AtomicReference<Throwable> firstError = new AtomicReference<>();
-        List<CompletableFuture<HttpResponse<byte[]>>> exchanges = new ArrayList<>(requests.size());
+        List<CompletableFuture<HttpResponse<Long>>> exchanges = new ArrayList<>(requests.size());
         List<CompletableFuture<Void>> completions = new ArrayList<>(requests.size());
         long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(EXCHANGE_TIMEOUT_SECONDS);
         try
@@ -237,7 +281,7 @@ public abstract class AbstractDownloadStrategy
                 {
                     throw new TimeoutException("batch stalled during submission");
                 }
-                CompletableFuture<HttpResponse<byte[]>> exchange = _httpClient.sendAsync(requests.get(index), HttpResponse.BodyHandlers.ofByteArray());
+                CompletableFuture<HttpResponse<Long>> exchange = _httpClient.sendAsync(requests.get(index), streamingHandler(status -> handler.streamStatus(requestIndex, status), handler.sink(requestIndex)));
                 exchanges.add(exchange);
                 completions.add(exchange.handle((response, error) ->
                 {
@@ -249,7 +293,7 @@ public abstract class AbstractDownloadStrategy
                     }
                     try
                     {
-                        handler.handle(requestIndex, response);
+                        handler.settled(requestIndex, response.statusCode(), response.body() == null ? 0L : response.body());
                     }
                     catch (Throwable t)
                     {
@@ -262,7 +306,7 @@ public abstract class AbstractDownloadStrategy
         }
         catch (Exception e)
         {
-            for (CompletableFuture<HttpResponse<byte[]>> exchange : exchanges)
+            for (CompletableFuture<HttpResponse<Long>> exchange : exchanges)
             {
                 exchange.cancel(true);
             }
@@ -284,12 +328,149 @@ public abstract class AbstractDownloadStrategy
     }
 
     /**
-     * EN: Callback invoked for each response of a concurrent batch; may throw to fail the batch. <br>
-     * RU: Колбэк на каждый ответ параллельной партии; может бросить, чтобы провалить партию. <br>
+     * EN: Destination for streamed raw bytes: one call per chunk as the body arrives, with the chunk's
+     *     absolute {@code offset} within its part (or range). An in-memory request appends the chunk sequentially
+     *     and ignores the offset; a temp-file request writes it at that offset. The sink consumes the buffer's
+     *     remaining bytes. <br>
+     * RU: Назначение для потоковых сырых байтов: один вызов на кусок по мере поступления тела, с абсолютным
+     *     {@code offset} куска внутри его части (или диапазона). Запрос в памяти дописывает кусок
+     *     последовательно и игнорирует смещение; запрос с временным файлом пишет его по этому смещению.
+     *     Приёмник потребляет оставшиеся байты буфера. <br>
      **/
     @FunctionalInterface
-    protected interface PartHandler
+    protected interface ChunkSink
     {
-        void handle(int index, HttpResponse<byte[]> response) throws Exception;
+        void accept(long offset, ByteBuffer chunk) throws IOException;
+    }
+
+    /**
+     * EN: Per-index control for a concurrent streaming batch: the {@link ChunkSink} a request's chunks land in,
+     *     which statuses actually feed that sink ({@link #streamStatus}), and a post-drain hook
+     *     ({@link #settled}) that records status/length and may throw to fail the whole batch. <br>
+     * RU: Поиндексное управление параллельной потоковой партией: {@link ChunkSink}, куда ложатся куски запроса,
+     *     какие статусы реально кормят этот приёмник ({@link #streamStatus}), и хук после осушения
+     *     ({@link #settled}), который фиксирует статус/длину и может бросить, чтобы провалить всю партию. <br>
+     **/
+    protected interface StreamHandler
+    {
+        /**
+         * EN: The sink the given request's streamed chunks are written into. <br>
+         * RU: Приёмник, в который пишутся потоковые куски указанного запроса. <br>
+         * ==================================================================<br>
+         * EN: @param index the request index / RU: @param index индекс запроса <br>
+         * @return <br>
+         *         {ChunkSink} - EN: the destination sink / RU: приёмник-назначение <br>
+         **/
+        ChunkSink sink(int index);
+
+        /**
+         * EN: Whether a response with the given status should be streamed into the sink (otherwise its body is
+         *     drained and discarded, leaving the sink untouched). <br>
+         * RU: Нужно ли ответ с данным статусом писать в приёмник (иначе его тело вычитывается и отбрасывается,
+         *     не трогая приёмник). <br>
+         * ==================================================================<br>
+         * EN: @param index the request index / RU: @param index индекс запроса <br>
+         * EN: @param statusCode the response status / RU: @param statusCode статус ответа <br>
+         * @return <br>
+         *         {true}  - EN: stream into the sink / RU: писать в приёмник <br>
+         *         {false} - EN: drain and discard / RU: вычитать и отбросить <br>
+         **/
+        boolean streamStatus(int index, int statusCode);
+
+        /**
+         * EN: Called once the given request has fully drained; records status/length and may throw to fail the
+         *     batch (e.g. a non-success status or an ignored Range). <br>
+         * RU: Вызывается после полного вычитывания запроса; фиксирует статус/длину и может бросить, чтобы
+         *     провалить партию (например, не-успешный статус или проигнорированный Range). <br>
+         * ==================================================================<br>
+         * EN: @param index the request index / RU: @param index индекс запроса <br>
+         * EN: @param statusCode the response status / RU: @param statusCode статус ответа <br>
+         * EN: @param bytesStreamed the body byte count / RU: @param bytesStreamed число байтов тела <br>
+         **/
+        void settled(int index, int statusCode, long bytesStreamed) throws Exception;
+    }
+
+    /**
+     * EN: A backpressured {@link HttpResponse.BodySubscriber} that pushes each incoming {@link ByteBuffer}
+     *     straight into a {@link ChunkSink} (or discards it when the sink is {@code null}), tracking a running
+     *     offset within the part and the total byte count that becomes the resolved body value. It requests one
+     *     item at a time so at most a small number of buffers are ever in flight — the memory bound that
+     *     replaces the whole-{@code byte[]} body. A sink failure cancels the subscription and completes the body
+     *     future exceptionally, surfacing as a retryable transport-style error. <br>
+     * RU: Потоковый {@link HttpResponse.BodySubscriber} с обратным давлением, который проталкивает каждый
+     *     входящий {@link ByteBuffer} прямо в {@link ChunkSink} (или отбрасывает при {@code null}-приёмнике),
+     *     ведя текущее смещение внутри части и суммарное число байтов, которое становится итоговым значением
+     *     тела. Он запрашивает по одному элементу за раз, поэтому в полёте всегда лишь небольшое число буферов —
+     *     ограничение памяти, заменяющее тело в виде целого {@code byte[]}. Сбой приёмника отменяет подписку и
+     *     завершает future тела с исключением, проявляясь как повторяемая ошибка транспортного рода. <br>
+     **/
+    private static final class StreamingBodySubscriber implements HttpResponse.BodySubscriber<Long>
+    {
+        private final ChunkSink _sink;
+        private final CompletableFuture<Long> _result;
+        private Flow.Subscription _subscription;
+        private long _offset;
+        private long _count;
+
+        private StreamingBodySubscriber(ChunkSink sink)
+        {
+            _sink = sink;
+            _result = new CompletableFuture<>();
+            _offset = 0L;
+            _count = 0L;
+        }
+
+        @Override
+        public CompletionStage<Long> getBody()
+        {
+            return _result;
+        }
+
+        @Override
+        public void onSubscribe(Flow.Subscription subscription)
+        {
+            _subscription = subscription;
+            subscription.request(1);
+        }
+
+        @Override
+        public void onNext(List<ByteBuffer> items)
+        {
+            try
+            {
+                for (ByteBuffer buffer : items)
+                {
+                    int length = buffer.remaining();
+                    if (length == 0)
+                    {
+                        continue;
+                    }
+                    if (_sink != null)
+                    {
+                        _sink.accept(_offset, buffer);
+                    }
+                    _offset += length;
+                    _count += length;
+                }
+                _subscription.request(1);
+            }
+            catch (Throwable t)
+            {
+                _subscription.cancel();
+                _result.completeExceptionally(t);
+            }
+        }
+
+        @Override
+        public void onError(Throwable throwable)
+        {
+            _result.completeExceptionally(throwable);
+        }
+
+        @Override
+        public void onComplete()
+        {
+            _result.complete(_count);
+        }
     }
 }

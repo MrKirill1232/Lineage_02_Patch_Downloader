@@ -3,6 +3,10 @@ package org.index.patchdownloader.model.decompress;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 
 import org.index.patchdownloader.interfaces.IDecompressor;
 import org.index.patchdownloader.interfaces.IDummyLogger;
@@ -33,16 +37,16 @@ public class LzmaDecompressor implements IDecompressor
     @Override
     public byte[] decompress(byte[] compressData) throws IOException
     {
-        int sizeHint = getUnCompressSize(compressData);
-        if (sizeHint <= 0 || sizeHint == Integer.MAX_VALUE)
+        long sizeHint = getUnCompressSize(compressData);
+        if (sizeHint <= 0)
         {
-            sizeHint = Math.max(compressData.length * 2, 1024);
+            sizeHint = Math.max((long) compressData.length * 2, 1024L);
         }
         // Cap the initial buffer so a corrupt/oversized header size cannot trigger a huge upfront
         // allocation; the growable stream still expands as needed for genuinely large files.
-        sizeHint = Math.min(sizeHint, MAX_INITIAL_BUFFER);
+        int initialBuffer = (int) Math.min(sizeHint, MAX_INITIAL_BUFFER);
         try (LZMAInputStream archiveStream = new LZMAInputStream(new ByteArrayInputStream(compressData));
-             ByteArrayOutputStream outputStream = new ByteArrayOutputStream(sizeHint))
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream(initialBuffer))
         {
             byte[] buffer = new byte[8192];
             int read;
@@ -51,6 +55,37 @@ public class LzmaDecompressor implements IDecompressor
                 outputStream.write(buffer, 0, read);
             }
             return outputStream.toByteArray();
+        }
+    }
+
+    /**
+     * EN: Streams an LZMA stream from {@code in} to {@code out} through the same {@link LZMAInputStream} decoder
+     *     the array path uses, so the decompressed bytes are identical; only the source and destination are
+     *     channels instead of arrays, keeping memory at one fixed transfer buffer. The decoder wraps {@code in}
+     *     via {@link Channels#newInputStream}; closing the decoder closes that source stream (hence {@code in}),
+     *     while {@code out} is left open for the caller. <br>
+     * RU: Потоково передаёт LZMA-поток из {@code in} в {@code out} тем же декодером {@link LZMAInputStream}, что
+     *     использует путь через массив, поэтому распакованные байты идентичны; отличаются лишь источник и
+     *     приёмник — каналы вместо массивов, что удерживает память в пределах одного фиксированного буфера
+     *     передачи. Декодер оборачивает {@code in} через {@link Channels#newInputStream}; закрытие декодера
+     *     закрывает этот источник (а значит и {@code in}), тогда как {@code out} остаётся открытым для
+     *     вызывающего. <br>
+     * ==================================================================<br>
+     * EN: @param in the LZMA byte source / RU: @param in источник байтов LZMA <br>
+     * EN: @param out the decompressed byte sink / RU: @param out приёмник распакованных байтов <br>
+     * EN: @param expectedFinalLength expected uncompressed length or -1 (unused) / RU: @param expectedFinalLength ожидаемая распакованная длина или -1 (не используется) <br>
+     **/
+    @Override
+    public void decompress(ReadableByteChannel in, WritableByteChannel out, long expectedFinalLength) throws IOException
+    {
+        try (LZMAInputStream archiveStream = new LZMAInputStream(Channels.newInputStream(in)))
+        {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = archiveStream.read(buffer)) != -1)
+            {
+                Decompressors.writeFully(out, ByteBuffer.wrap(buffer, 0, read));
+            }
         }
     }
 
@@ -82,7 +117,7 @@ public class LzmaDecompressor implements IDecompressor
      *         {false} - EN: not decodable LZMA / RU: не декодируемый LZMA <br>
      **/
     @Override
-    public boolean check(byte[] compressData, int expectedFinalLength)
+    public boolean check(byte[] compressData, long expectedFinalLength)
     {
         if (compressData.length < MIN_HEADER_LENGTH)
         {
@@ -103,38 +138,58 @@ public class LzmaDecompressor implements IDecompressor
             IDummyLogger.log(IDummyLogger.ERROR, "Cannot decode LZMA: dictionary is too big for this implementation.");
             return false;
         }
-        int uncompressedSize = getUnCompressSize(compressData);
-        if (uncompressedSize <= 0 || uncompressedSize == Integer.MAX_VALUE)
+        long uncompressedSize = getUnCompressSize(compressData);
+        if (uncompressedSize <= 0)
         {
             return false;
         }
         return true;
     }
 
+    /**
+     * EN: LZMA self-recognises an already-final payload by length: when the raw length equals the expected
+     *     decompressed length, the bytes ARE the finished file, not an LZMA stream — mirrors the length half of
+     *     {@link #check(byte[], long)} for the streaming path, which only peeks the header. <br>
+     * RU: LZMA распознаёт уже-финальный объём по длине: когда сырая длина равна ожидаемой распакованной, байты и
+     *     ЕСТЬ готовый файл, а не LZMA-поток — повторяет размерную половину {@link #check(byte[], long)} для
+     *     потокового пути, который лишь подглядывает заголовок. <br>
+     * ==================================================================<br>
+     * EN: @param rawLength the raw payload length, or -1 / RU: @param rawLength сырая длина объёма или -1 <br>
+     * EN: @param expectedFinalLength the expected decompressed length, or -1 / RU: @param expectedFinalLength ожидаемая распакованная длина или -1 <br>
+     * @return <br>
+     *         {boolean} - EN: true when raw length == expected final length / RU: true, когда сырая длина == ожидаемой финальной <br>
+     **/
     @Override
-    public int getCompressSize(byte[] compressedDataArray)
+    public boolean isAlreadyFinal(long rawLength, long expectedFinalLength)
+    {
+        return expectedFinalLength > 0 && rawLength == expectedFinalLength;
+    }
+
+    @Override
+    public long getCompressSize(byte[] compressedDataArray)
     {
         return compressedDataArray.length;
     }
 
     /**
-     * EN: Reads the 64-bit little-endian uncompressed-size field at offset 5 of the LZMA header,
-     *     clamped to {@code int}. <br>
-     * RU: Читает 64-битное little-endian поле распакованного размера по смещению 5 заголовка LZMA,
-     *     ограниченное {@code int}. <br>
+     * EN: Reads the 64-bit little-endian uncompressed-size field at offset 5 of the LZMA header as a
+     *     full {@code long} (no truncation), so sizes at or above two gigabytes are represented exactly. <br>
+     * RU: Читает 64-битное little-endian поле распакованного размера по смещению 5 заголовка LZMA как
+     *     полноценный {@code long} (без усечения), поэтому размеры от двух гигабайт и выше
+     *     представляются точно. <br>
      * ==================================================================<br>
      * EN: @param compressedDataArray the LZMA bytes / RU: @param compressedDataArray байты LZMA <br>
      * @return <br>
-     *         {int} - EN: uncompressed size (clamped) / RU: распакованный размер (ограниченный) <br>
+     *         {long} - EN: uncompressed size / RU: распакованный размер <br>
      **/
     @Override
-    public int getUnCompressSize(byte[] compressedDataArray)
+    public long getUnCompressSize(byte[] compressedDataArray)
     {
         long uncompSize = 0;
         for (int index = 0; index < 8; ++index)
         {
             uncompSize |= ((long) (compressedDataArray[index + 5] & 255)) << (8 * index);
         }
-        return (int) Math.min(Integer.MAX_VALUE, uncompSize);
+        return uncompSize;
     }
 }

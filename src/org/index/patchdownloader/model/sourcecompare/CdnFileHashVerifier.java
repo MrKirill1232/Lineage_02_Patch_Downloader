@@ -54,7 +54,10 @@ public class CdnFileHashVerifier implements ISourceVerifier
         try
         {
             File canonicalSource = source.getCanonicalFile();
-            String rootPrefix = _sourceRoot.getCanonicalPath() + File.separator;
+            // Do NOT blindly append a separator: a drive-root ("D:\\") canonicalises WITH a trailing separator, so
+            // adding another yields "D:\\\\" which nothing starts with — every file would be reported missing.
+            String canonicalRoot = _sourceRoot.getCanonicalPath();
+            String rootPrefix = canonicalRoot.endsWith(File.separator) ? canonicalRoot : canonicalRoot + File.separator;
             if (!canonicalSource.getPath().startsWith(rootPrefix))
             {
                 return SourceVerdict.SOURCE_MISSING;
@@ -69,7 +72,7 @@ public class CdnFileHashVerifier implements ISourceVerifier
         {
             return SourceVerdict.SOURCE_MISSING;
         }
-        int expectedLength = fileInfo.getFileLength();
+        long expectedLength = fileInfo.getFileLength();
         if (_checkSize && expectedLength >= 0 && source.length() != expectedLength)
         {
             return SourceVerdict.SIZE_MISMATCH;

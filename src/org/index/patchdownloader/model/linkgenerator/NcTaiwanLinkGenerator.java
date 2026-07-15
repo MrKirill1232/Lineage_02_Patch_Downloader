@@ -185,7 +185,7 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
             fileInfoHolder.setAccessLink(new LinkInfoHolder(fileInfoHolder));
             fileInfoHolder.getAccessLink().setAccessLink(formatGetUrl(pathUndName));
         }
-        fileInfoHolder.setDownloadDataLength(Integer.parseInt(fileLength));
+        fileInfoHolder.setDownloadDataLength(Long.parseLong(fileLength));
         fileInfoHolder.setDownloadDataHashSum(hashSum);
 
         return fileInfoHolder;
@@ -224,7 +224,7 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
             String  fileLength  = splitLineInfo[1];
             String  hashSum     = splitLineInfo[2];
 
-            fileInfo.setFileLength(Integer.parseInt(fileLength));
+            fileInfo.setFileLength(Long.parseLong(fileLength));
             fileInfo.setFileHashSum(hashSum);
         }
     }
