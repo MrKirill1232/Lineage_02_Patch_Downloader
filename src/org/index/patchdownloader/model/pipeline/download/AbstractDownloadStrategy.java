@@ -178,25 +178,38 @@ public abstract class AbstractDownloadStrategy
     }
 
     /**
-     * EN: A body handler that streams the response body straight into a {@link ChunkSink} as it arrives,
-     *     instead of buffering a whole {@code byte[]}. The sink is attached only when {@code streamStatus}
-     *     accepts the response status; on any other status the body is drained and discarded (so the connection
-     *     is freed and the byte count is still known) and the caller decides how to react to the status. The
-     *     resolved body value is the number of body bytes seen. <br>
-     * RU: Обработчик тела, который потоково пишет тело ответа прямо в {@link ChunkSink} по мере поступления,
-     *     а не буферизует целый {@code byte[]}. Приёмник подключается, только когда {@code streamStatus}
-     *     принимает статус ответа; при любом другом статусе тело вычитывается и отбрасывается (чтобы соединение
-     *     освободилось, а число байтов всё равно было известно), и вызывающий сам решает, как реагировать на
-     *     статус. Итоговое значение тела — число увиденных байтов тела. <br>
+     * EN: A body handler that streams the response body straight into a {@link ChunkSink} as it arrives, instead
+     *     of buffering a whole {@code byte[]}. The status decides the mode: when {@code streamStatus} accepts it,
+     *     the body feeds the sink; otherwise the body is REJECTED, and {@code cancelOnReject} chooses how — either
+     *     CANCEL it (abort before pulling any body: a large unwanted body, e.g. a whole-file 200 whose Range the
+     *     server ignored, is never dragged over the network — at the cost of tearing the connection down) or DRAIN
+     *     it (read and discard, so a small error body still frees the connection for keep-alive). The resolved body
+     *     value is the number of body bytes seen. <br>
+     * RU: Обработчик тела, который потоково пишет тело ответа прямо в {@link ChunkSink} по мере поступления, а не
+     *     буферизует целый {@code byte[]}. Статус выбирает режим: когда {@code streamStatus} его принимает, тело
+     *     кормит приёмник; иначе тело ОТКЛОНЯЕТСЯ, и {@code cancelOnReject} решает как — либо ОТМЕНИТЬ его
+     *     (оборвать до вытягивания какого-либо тела: большое ненужное тело, напр. файл целиком по 200, чей Range
+     *     сервер проигнорировал, ни разу не тянется по сети — ценой разрыва соединения), либо ВЫЧИТАТЬ (прочитать и
+     *     отбросить, чтобы маленькое тело ошибки всё же освободило соединение для keep-alive). Итоговое значение
+     *     тела — число увиденных байтов. <br>
      * ==================================================================<br>
      * EN: @param streamStatus which statuses feed the sink / RU: @param streamStatus какие статусы кормят приёмник <br>
+     * EN: @param cancelOnReject for a rejected status, true = cancel (do not pull the body), false = drain / RU: @param cancelOnReject для отклонённого статуса: true = отменить (не тянуть тело), false = вычитать <br>
      * EN: @param sink the destination of the streamed chunks / RU: @param sink назначение потоковых кусков <br>
      * @return <br>
      *         {HttpResponse.BodyHandler} - EN: the streaming body handler / RU: потоковый обработчик тела <br>
      **/
-    protected HttpResponse.BodyHandler<Long> streamingHandler(IntPredicate streamStatus, ChunkSink sink)
+    protected HttpResponse.BodyHandler<Long> streamingHandler(IntPredicate streamStatus, IntPredicate cancelOnReject, ChunkSink sink)
     {
-        return responseInfo -> new StreamingBodySubscriber(streamStatus.test(responseInfo.statusCode()) ? sink : null);
+        return responseInfo ->
+        {
+            int status = responseInfo.statusCode();
+            if (streamStatus.test(status))
+            {
+                return new StreamingBodySubscriber(sink, false);
+            }
+            return new StreamingBodySubscriber(null, cancelOnReject.test(status));
+        };
     }
 
     /**
@@ -215,7 +228,9 @@ public abstract class AbstractDownloadStrategy
      **/
     protected long streamOne(LinkInfoHolder linkInfo, ChunkSink sink) throws Exception
     {
-        HttpResponse<Long> response = sendWithExchangeTimeout(buildRequest(linkInfo), streamingHandler(status -> status == 200, sink));
+        // A non-200 body here is a small error page: drain it (cancelOnReject = false) so the connection stays
+        // reusable rather than being torn down.
+        HttpResponse<Long> response = sendWithExchangeTimeout(buildRequest(linkInfo), streamingHandler(status -> status == 200, status -> false, sink));
         long count = response.body() == null ? 0L : response.body();
         linkInfo.setHttpStatus(response.statusCode());
         linkInfo.setHttpLength(count);
@@ -281,7 +296,7 @@ public abstract class AbstractDownloadStrategy
                 {
                     throw new TimeoutException("batch stalled during submission");
                 }
-                CompletableFuture<HttpResponse<Long>> exchange = _httpClient.sendAsync(requests.get(index), streamingHandler(status -> handler.streamStatus(requestIndex, status), handler.sink(requestIndex)));
+                CompletableFuture<HttpResponse<Long>> exchange = _httpClient.sendAsync(requests.get(index), streamingHandler(status -> handler.streamStatus(requestIndex, status), status -> handler.cancelOnReject(requestIndex, status), handler.sink(requestIndex)));
                 exchanges.add(exchange);
                 completions.add(exchange.handle((response, error) ->
                 {
@@ -365,17 +380,40 @@ public abstract class AbstractDownloadStrategy
 
         /**
          * EN: Whether a response with the given status should be streamed into the sink (otherwise its body is
-         *     drained and discarded, leaving the sink untouched). <br>
-         * RU: Нужно ли ответ с данным статусом писать в приёмник (иначе его тело вычитывается и отбрасывается,
-         *     не трогая приёмник). <br>
+         *     rejected — drained or, per {@link #cancelOnReject}, cancelled — leaving the sink untouched). <br>
+         * RU: Нужно ли ответ с данным статусом писать в приёмник (иначе его тело отклоняется — вычитывается либо, по
+         *     {@link #cancelOnReject}, отменяется — не трогая приёмник). <br>
          * ==================================================================<br>
          * EN: @param index the request index / RU: @param index индекс запроса <br>
          * EN: @param statusCode the response status / RU: @param statusCode статус ответа <br>
          * @return <br>
          *         {true}  - EN: stream into the sink / RU: писать в приёмник <br>
-         *         {false} - EN: drain and discard / RU: вычитать и отбросить <br>
+         *         {false} - EN: reject (drain or cancel) / RU: отклонить (вычитать или отменить) <br>
          **/
         boolean streamStatus(int index, int statusCode);
+
+        /**
+         * EN: For a status that is NOT streamed (rejected by {@link #streamStatus}), whether to CANCEL the body
+         *     immediately (never pull it) instead of draining-and-discarding it. Cancelling avoids dragging a large
+         *     unwanted body over the network (a whole-file {@code 200} whose Range the server ignored) but tears the
+         *     connection down; draining keeps the connection alive and suits a small error body. Default
+         *     {@code false} (drain). <br>
+         * RU: Для статуса, который НЕ пишется в приёмник (отклонён {@link #streamStatus}) — отменять ли тело сразу
+         *     (не вытягивая его вовсе), вместо вычитывания-и-отбрасывания. Отмена избегает протаскивания большого
+         *     ненужного тела по сети (файл целиком по {@code 200}, чей Range сервер проигнорировал), но рвёт
+         *     соединение; вычитывание сохраняет соединение и подходит для маленького тела ошибки. По умолчанию
+         *     {@code false} (вычитывать). <br>
+         * ==================================================================<br>
+         * EN: @param index the request index / RU: @param index индекс запроса <br>
+         * EN: @param statusCode the response status / RU: @param statusCode статус ответа <br>
+         * @return <br>
+         *         {true}  - EN: cancel the body (do not pull it) / RU: отменить тело (не тянуть его) <br>
+         *         {false} - EN: drain and discard / RU: вычитать и отбросить <br>
+         **/
+        default boolean cancelOnReject(int index, int statusCode)
+        {
+            return false;
+        }
 
         /**
          * EN: Called once the given request has fully drained; records status/length and may throw to fail the
@@ -407,14 +445,16 @@ public abstract class AbstractDownloadStrategy
     private static final class StreamingBodySubscriber implements HttpResponse.BodySubscriber<Long>
     {
         private final ChunkSink _sink;
+        private final boolean _cancelImmediately;
         private final CompletableFuture<Long> _result;
         private Flow.Subscription _subscription;
         private long _offset;
         private long _count;
 
-        private StreamingBodySubscriber(ChunkSink sink)
+        private StreamingBodySubscriber(ChunkSink sink, boolean cancelImmediately)
         {
             _sink = sink;
+            _cancelImmediately = cancelImmediately;
             _result = new CompletableFuture<>();
             _offset = 0L;
             _count = 0L;
@@ -430,6 +470,17 @@ public abstract class AbstractDownloadStrategy
         public void onSubscribe(Flow.Subscription subscription)
         {
             _subscription = subscription;
+            if (_cancelImmediately)
+            {
+                // Reject-and-abort: cancel BEFORE requesting any body, so a large unwanted body (a whole-file 200
+                // whose Range the server ignored) is never pulled over the network. This tears the connection down
+                // (no keep-alive) — the right trade only for a large body; a small error body is drained instead
+                // (decided in streamingHandler). Complete the body future so the exchange settles and the caller's
+                // settled() hook still runs.
+                subscription.cancel();
+                _result.complete(_count);
+                return;
+            }
             subscription.request(1);
         }
 

@@ -16,25 +16,44 @@ import org.index.patchdownloader.enums.StorageStrategy;
  **/
 public final class StorageRouter
 {
+    /**
+     * EN: Largest payload that can live in memory: a Java array's practical ceiling ({@code Integer.MAX_VALUE - 8},
+     *     matching {@code MemoryFileRequest}'s own array guard). A file strictly larger than this can NEVER be held
+     *     as a {@code byte[]}, so it is force-routed to a temp file regardless of mode. <br>
+     * RU: Наибольший объём, который может жить в памяти: практический потолок Java-массива
+     *     ({@code Integer.MAX_VALUE - 8}, совпадает с собственной защитой массива в {@code MemoryFileRequest}).
+     *     Файл строго больше него НИКОГДА не поместится в {@code byte[]}, поэтому принудительно направляется во
+     *     временный файл независимо от режима. <br>
+     **/
+    private static final long MAX_IN_MEMORY_BYTES = Integer.MAX_VALUE - 8;
+
     private StorageRouter()
     {
     }
 
     /**
      * EN: Picks the storage strategy for one file. An unknown size is expressed as a negative
-     *     {@code knownSizeBytes}. Rules by mode:
+     *     {@code knownSizeBytes}. A file physically too big for a Java array ({@code > MAX_IN_MEMORY_BYTES}, ~2 GB)
+     *     is force-routed to {@link StorageStrategy#TEMPORARY} FIRST, in ANY mode — it can never be a {@code byte[]},
+     *     so the temp path (which streams range-by-range into a pre-sized temp file) is the only one that can carry
+     *     it; without this it would build a memory request and fail late mid-download at the array guard. Otherwise,
+     *     by mode:
      *     <ul>
-     *         <li>{@code ALL_MEMORY} → always {@link StorageStrategy#MEMORY} (an oversized file is rejected
-     *             later by the pipeline, not here).</li>
+     *         <li>{@code ALL_MEMORY} → {@link StorageStrategy#MEMORY} (an over-{@code thresholdBytes} file is
+     *             rejected earlier by the pipeline, not here).</li>
      *         <li>{@code HYBRID} → {@link StorageStrategy#TEMPORARY} when the size is unknown or strictly
      *             greater than {@code thresholdBytes}, otherwise {@link StorageStrategy#MEMORY}.</li>
      *         <li>{@code ALL_TEMP} → always {@link StorageStrategy#TEMPORARY}.</li>
      *     </ul><br>
      * RU: Выбирает стратегию хранения для одного файла. Неизвестный размер выражается отрицательным
-     *     {@code knownSizeBytes}. Правила по режиму:
+     *     {@code knownSizeBytes}. Файл, физически не помещающийся в Java-массив ({@code > MAX_IN_MEMORY_BYTES},
+     *     ~2 ГБ), СНАЧАЛА принудительно направляется в {@link StorageStrategy#TEMPORARY} в ЛЮБОМ режиме — он никогда
+     *     не станет {@code byte[]}, поэтому путь временного файла (потоково пишущий диапазон за диапазоном в
+     *     заранее выделенный файл) — единственный, кто его выдержит; без этого он построил бы запрос в памяти и упал
+     *     бы поздно, посреди загрузки, на защите массива. Иначе — по режиму:
      *     <ul>
-     *         <li>{@code ALL_MEMORY} → всегда {@link StorageStrategy#MEMORY} (слишком большой файл отклоняется
-     *             позже конвейером, а не здесь).</li>
+     *         <li>{@code ALL_MEMORY} → {@link StorageStrategy#MEMORY} (файл сверх {@code thresholdBytes}
+     *             отклоняется раньше конвейером, а не здесь).</li>
      *         <li>{@code HYBRID} → {@link StorageStrategy#TEMPORARY}, если размер неизвестен или строго больше
      *             {@code thresholdBytes}, иначе {@link StorageStrategy#MEMORY}.</li>
      *         <li>{@code ALL_TEMP} → всегда {@link StorageStrategy#TEMPORARY}.</li>
@@ -50,6 +69,12 @@ public final class StorageRouter
      **/
     public static StorageStrategy pick(DownloadMode mode, long knownSizeBytes, long thresholdBytes)
     {
+        // Hard physical override, ahead of the mode rules: a payload that cannot fit a Java array can never be an
+        // in-memory request, so it MUST stream through a temp file — even in ALL_MEMORY / an unset mode.
+        if (knownSizeBytes > MAX_IN_MEMORY_BYTES)
+        {
+            return StorageStrategy.TEMPORARY;
+        }
         if (mode == null)
         {
             // EN: No configured mode is treated as the historical all-memory behaviour.

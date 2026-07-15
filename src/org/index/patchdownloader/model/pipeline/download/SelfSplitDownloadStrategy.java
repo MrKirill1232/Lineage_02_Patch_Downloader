@@ -293,8 +293,17 @@ public class SelfSplitDownloadStrategy extends AbstractDownloadStrategy
             public boolean streamStatus(int index, int statusCode)
             {
                 // A multi-chunk 200 means Range was ignored (whole file on one connection): do NOT stream it
-                // into a single range slot; drain-and-discard, and let settled() abort the batch.
+                // into a single range slot; reject it (cancelled — see cancelOnReject) and let settled() abort the batch.
                 return statusCode == 206 || (statusCode == 200 && singleChunk);
+            }
+
+            @Override
+            public boolean cancelOnReject(int index, int statusCode)
+            {
+                // A rejected 200 in a multi-chunk plan is the WHOLE file (server ignored Range): CANCEL its body so
+                // we never drag N x the whole file over the network just to discard it before falling back to a
+                // single GET. (A single-chunk 200 is streamed, not rejected; a non-2xx error body is small — drained.)
+                return statusCode == 200 && !singleChunk;
             }
 
             @Override
