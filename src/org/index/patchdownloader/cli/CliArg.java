@@ -14,6 +14,7 @@ import org.index.patchdownloader.cli.instances.CliExcludeFilterInstance;
 import org.index.patchdownloader.cli.instances.CliHelpInstance;
 import org.index.patchdownloader.cli.instances.CliIncludeFilterInstance;
 import org.index.patchdownloader.cli.instances.CliInnerPathInstance;
+import org.index.patchdownloader.cli.instances.CliLastVersionInstance;
 import org.index.patchdownloader.cli.instances.CliLogCheckInstance;
 import org.index.patchdownloader.cli.instances.CliPatchVersionInstance;
 import org.index.patchdownloader.cli.instances.CliRestoreHashInstance;
@@ -45,6 +46,7 @@ public enum CliArg
     HELP(CliHelpInstance::new),
     CDN_SOURCE(CliCdnSourceInstance::new),
     PATCH_VERSION(CliPatchVersionInstance::new),
+    LAST_VERSION(CliLastVersionInstance::new),
     DOWNLOAD_PATH(CliDownloadPathInstance::new),
     INNER_PATH(CliInnerPathInstance::new),
     INCLUDE_FILTER(CliIncludeFilterInstance::new),

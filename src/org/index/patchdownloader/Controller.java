@@ -1,5 +1,6 @@
 package org.index.patchdownloader;
 
+import org.index.patchdownloader.cli.CliArg;
 import org.index.patchdownloader.cli.CliArguments;
 import org.index.patchdownloader.config.MainConfigHolder;
 import org.index.patchdownloader.config.configs.MainConfig;
@@ -67,16 +68,27 @@ public class Controller
      **/
     public static void main(String[] args)
     {
+        // -last_version is a standalone CLI action: it queries the update server using only the CDN passed on the
+        // command line and downloads nothing, so the jar must run it without a config. Still try to load the config
+        // (so a cdn_source from Main.ini works too), but when the flag is present a missing/broken Main.ini is only
+        // a warning, not a fatal exit.
+        boolean lastVersionOnly = requestsLastVersion(args);
         try
         {
             MainConfigHolder.getInstance().load();
         }
         catch (Exception e)
         {
-            IDummyLogger.log(IDummyLogger.ERROR, "Cannot load config 'work/config/Main.ini': " + e);
-            System.exit(1);
-            return;
+            if (!lastVersionOnly)
+            {
+                IDummyLogger.log(IDummyLogger.ERROR, "Cannot load config 'work/config/Main.ini': " + e);
+                System.exit(1);
+                return;
+            }
+            IDummyLogger.log(IDummyLogger.WARNING, "Config not loaded (" + e + "); continuing for -last_version using command-line arguments only.");
         }
+        // -last_version (if present) resolves the version and exits WITHIN this parse call, like -help — it never
+        // returns here. So everything below runs only for a normal download run.
         CliArguments.parse(args);
         if (!FileUtils.canGetAccessToFolder(MainConfig.DOWNLOAD_PATH))
         {
@@ -91,6 +103,39 @@ public class Controller
             return;
         }
         new Controller(MainConfig.CDN_SOURCE, MainConfig.PATCH_VERSION_SOURCE);
+    }
+
+    /**
+     * EN: Whether the start-up arguments request the {@code -last_version} action, matched case-insensitively
+     *     against that flag's own {@code getParsableAttributes()} (so the two never drift apart). Checked BEFORE
+     *     the config load so a standalone version query can run without a {@code Main.ini}. <br>
+     * RU: Запрашивают ли аргументы запуска действие {@code -last_version}; сопоставляется без учёта регистра с
+     *     собственным {@code getParsableAttributes()} этого флага (чтобы они не разошлись). Проверяется ДО загрузки
+     *     конфига, чтобы отдельный запрос версии мог работать без {@code Main.ini}. <br>
+     * ==================================================================<br>
+     * EN: @param args the start-up arguments / RU: @param args аргументы запуска <br>
+     * @return <br>
+     *         {true}  - EN: -last_version is present / RU: присутствует -last_version <br>
+     *         {false} - EN: not present / RU: отсутствует <br>
+     **/
+    private static boolean requestsLastVersion(String[] args)
+    {
+        if (args == null)
+        {
+            return false;
+        }
+        String[] flags = CliArg.LAST_VERSION.getInstance().getParsableAttributes();
+        for (String argument : args)
+        {
+            for (String flag : flags)
+            {
+                if (flag.equalsIgnoreCase(argument))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
 }
