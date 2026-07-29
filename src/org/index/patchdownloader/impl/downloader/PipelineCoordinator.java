@@ -53,6 +53,17 @@ public class PipelineCoordinator implements IPipelineSink
 
     private int _total;
     private int _rejected;
+    /**
+     * EN: Human-readable "path (reason)" line for every file selected for download that could NOT be scheduled
+     *     (over the ALL_MEMORY threshold, or its destination folder could not be created). Printed at the end of
+     *     the run so a skipped file is visible in the summary, not only in an ERROR line scrolled far above.
+     *     Built on the main thread in {@link #buildTasks()} before any stage starts, so a plain list suffices. <br>
+     * RU: Строка «путь (причина)» в читабельном виде для каждого выбранного к загрузке файла, который НЕ удалось
+     *     поставить в очередь (сверх порога ALL_MEMORY либо не удалось создать целевую папку). Печатается в конце
+     *     запуска, чтобы пропущенный файл был виден в сводке, а не только в строке ERROR далеко выше. Строится в
+     *     главном потоке в {@link #buildTasks()} до старта стадий, поэтому обычного списка достаточно. <br>
+     **/
+    private final List<String> _notScheduled;
     private IDownloadVerifier _verifier;
 
     /**
@@ -74,6 +85,7 @@ public class PipelineCoordinator implements IPipelineSink
         _completionLatch = new CountDownLatch(1);
         _total = 0;
         _rejected = 0;
+        _notScheduled = new ArrayList<>();
         _verifier = IDownloadVerifier.NONE;
     }
 
@@ -173,6 +185,7 @@ public class PipelineCoordinator implements IPipelineSink
             {
                 IDummyLogger.log(IDummyLogger.ERROR, "Cannot create destination folder for '" + fileInfo.getLinkPath() + "'. Ignoring.");
                 _rejected++;
+                _notScheduled.add(fileInfo.getLinkPath() + " (destination folder could not be created)");
                 continue;
             }
             AbstractFileRequest request = createRequest(fileInfo, thresholdBytes);
@@ -221,6 +234,7 @@ public class PipelineCoordinator implements IPipelineSink
         if (MainConfig.DOWNLOAD_MODE == DownloadMode.ALL_MEMORY && knownSizeBytes > thresholdBytes)
         {
             IDummyLogger.log(IDummyLogger.ERROR, "Skipping '" + fileInfo.getLinkPath() + "': known size " + knownSizeBytes + " byte(s) exceeds the all-memory threshold of " + MainConfig.TEMP_FILE_THRESHOLD_MB + " MB (" + thresholdBytes + " byte(s)). Use download_mode=hybrid or all_temp to stream it through a temp file.");
+            _notScheduled.add(fileInfo.getLinkPath() + " (" + (knownSizeBytes / (1024L * 1024L)) + " MB exceeds the ALL_MEMORY limit of " + MainConfig.TEMP_FILE_THRESHOLD_MB + " MB; re-run with -download_mode all_temp or hybrid)");
             return null;
         }
         StorageStrategy strategy = StorageRouter.pick(MainConfig.DOWNLOAD_MODE, knownSizeBytes, thresholdBytes);
@@ -446,13 +460,18 @@ public class PipelineCoordinator implements IPipelineSink
     }
 
     /**
-     * EN: Shuts the stages down, prints the run summary (ok / failed / total + failed paths), drains the async
-     *     post-store verifier and prints its verdict, then exits the JVM once from the main thread — non-zero when
-     *     any file failed OR the verifier proved a file/piece corrupt. <br>
-     * RU: Останавливает стадии, печатает сводку запуска (ok / failed / total + пути проваленных файлов),
-     *     дожидается асинхронного верификатора, работающего после сохранения, и печатает его вердикт, затем один
-     *     раз выходит из JVM из главного потока — ненулевой код, если хоть один файл упал ИЛИ верификатор признал
-     *     файл/кусок битым. <br>
+     * EN: Shuts the stages down, prints the run summary (ok / failed / total), then one {@code FAILED:} line per
+     *     failed file and one {@code NOT DOWNLOADED:} line per file that could not be scheduled (with the reason,
+     *     e.g. over the ALL_MEMORY threshold) — so an incomplete run names exactly which files are missing and why.
+     *     Then drains the async post-store verifier and prints its verdict, and exits the JVM once from the main
+     *     thread — non-zero when any file failed, any file was not scheduled, OR the verifier proved a file/piece
+     *     corrupt. <br>
+     * RU: Останавливает стадии, печатает сводку запуска (ok / failed / total), затем по строке {@code FAILED:} на
+     *     каждый упавший файл и по строке {@code NOT DOWNLOADED:} на каждый файл, который не удалось поставить в
+     *     очередь (с причиной, например превышение порога ALL_MEMORY), — чтобы неполный запуск назвал, каких именно
+     *     файлов не хватает и почему. Затем дожидается асинхронного верификатора, работающего после сохранения,
+     *     печатает его вердикт и один раз выходит из JVM из главного потока — ненулевой код, если хоть один файл
+     *     упал, хоть один не поставлен в очередь ИЛИ верификатор признал файл/кусок битым. <br>
      **/
     private void finish()
     {
@@ -462,6 +481,10 @@ public class PipelineCoordinator implements IPipelineSink
         for (AbstractFileRequest task : _failedFiles)
         {
             IDummyLogger.log(IDummyLogger.ERROR, "FAILED: " + task.getLinkPath() + " (" + task.getFailure() + ")");
+        }
+        for (String notScheduled : _notScheduled)
+        {
+            IDummyLogger.log(IDummyLogger.ERROR, "NOT DOWNLOADED: " + notScheduled);
         }
         boolean verifyOk = _verifier.awaitAndReport();
         // Fail-CLOSED: a failed download, a file that could not be scheduled (over-threshold / un-creatable folder),

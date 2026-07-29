@@ -13,9 +13,24 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.regex.Pattern;
 
 public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
 {
+    /**
+     * EN: The archive suffix the CDN puts on top of the real file name: {@code .zip} for a single compressed
+     *     file, or {@code .z01} / {@code .z02} ... for one volume of a spanned archive. ONLY these two forms
+     *     are stripped when the final name is restored — a name is never shortened blindly, otherwise a file
+     *     whose own extension happens to be four characters long (for example {@code .torrent}) would come out
+     *     truncated ({@code .tor}) and would then be treated as an archive it is not. <br>
+     * RU: Архивный суффикс, который CDN добавляет поверх настоящего имени файла: {@code .zip} для одного сжатого
+     *     файла либо {@code .z01} / {@code .z02} ... для тома многотомного архива. При восстановлении итогового
+     *     имени отбрасываются ТОЛЬКО эти две формы — имя никогда не укорачивается вслепую, иначе файл, у которого
+     *     собственное расширение состоит из четырёх символов (например {@code .torrent}), получился бы обрезанным
+     *     ({@code .tor}) и дальше считался бы архивом, которым он не является. <br>
+     **/
+    private static final Pattern ARCHIVE_SUFFIX = Pattern.compile("\\.(?:zip|z\\d{2,})$", Pattern.CASE_INSENSITIVE);
+
     protected NcTaiwanLinkGenerator(int patchVersion)
     {
         super(CDNLink.NC_SOFT_TAIWAN, patchVersion);
@@ -110,7 +125,15 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
             int     typeOfFile  = Integer.parseInt(line.substring(line.length() - 1));
             boolean typeAllowsSeparation = (typeOfFile == FileTypeByLink.SEPARATED.ordinal() || typeOfFile == FileTypeByLink.UNK_04.ordinal());
             int     digitRunLength = trailingDigitRunLength(pathAndName);
-            boolean isSeparated = typeAllowsSeparation && digitRunLength >= 2;
+            // A '.zNN' suffix names one volume of a spanned archive whatever the type field says. Trusting the type
+            // alone lost every spanned set typed as something else (a DELTA_FILE '.dlt' split into '.z01'/'.z02'):
+            // the volumes were taken for standalone files, collapsed onto one name, and a lone slice reached the
+            // decoder. The volume suffix is checked as well, so such a set is assembled instead of being torn apart.
+            // RU: Суффикс '.zNN' обозначает том многотомного архива независимо от того, что стоит в поле типа.
+            // Доверие одному лишь типу теряло любой многотомный набор с другим типом (например DELTA_FILE '.dlt',
+            // разбитый на '.z01'/'.z02'): тома принимались за самостоятельные файлы, сводились к одному имени, и до
+            // распаковщика доходил одинокий кусок. Теперь проверяется и суффикс тома, поэтому набор склеивается.
+            boolean isSeparated = digitRunLength >= 2 && (typeAllowsSeparation || isCompressedEntry(pathAndName));
             String  nameOfPart  = isSeparated ? pathAndName.substring(0, pathAndName.length() - digitRunLength) + "%02d" : pathAndName;
             int     countOfSeparatedFiles;
             if (isSeparated)
@@ -137,8 +160,40 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
                     fileInfoHolder.setSeparatedPart(sIndex, parseFileInfoFromLine(lookingInfo, false, true, 0));
                 }
             }
-            _fileMapHolder.put((fileInfoHolder.getLinkPath()).toLowerCase(), fileInfoHolder);
+            putUnique((fileInfoHolder.getLinkPath()).toLowerCase(), fileInfoHolder);
         }
+    }
+
+    /**
+     * EN: Stores a holder under its output path, resolving the case where two CDN entries produce the SAME final
+     *     file. The list ships some files twice — once stored as-is and once compressed (a bare {@code .torrent}
+     *     next to its {@code .torrent.zip}) — and both restore to one name. The compressed entry wins: it is the
+     *     smaller transfer and decodes to exactly the same bytes. Previously the loser silently overwrote the
+     *     winner, and because the list is iterated in hash order the survivor was not even predictable. <br>
+     * RU: Кладёт holder по его итоговому пути, разбирая случай, когда две записи CDN дают ОДИН И ТОТ ЖЕ конечный
+     *     файл. Часть файлов в списке идёт дважды — как есть и в сжатом виде (голый {@code .torrent} рядом со своим
+     *     {@code .torrent.zip}), — и оба восстанавливаются в одно имя. Побеждает сжатая запись: её меньше качать, а
+     *     распаковывается она в те же самые байты. Раньше проигравший молча затирал победителя, а так как список
+     *     обходится в порядке хеш-таблицы, то и предсказать выжившего было нельзя. <br>
+     * ==================================================================<br>
+     * EN: @param mapKey the lower-cased output path / RU: @param mapKey итоговый путь в нижнем регистре <br>
+     * EN: @param candidate the freshly parsed holder / RU: @param candidate только что разобранный holder <br>
+     **/
+    private void putUnique(String mapKey, FileInfoHolder candidate)
+    {
+        FileInfoHolder previous = _fileMapHolder.get(mapKey);
+        if (previous != null)
+        {
+            boolean previousCompressed = previous.getCompressType() != ArchiveType.NONE;
+            boolean candidateCompressed = candidate.getCompressType() != ArchiveType.NONE;
+            FileInfoHolder keep = (!previousCompressed && candidateCompressed) ? candidate : previous;
+            IDummyLogger.log(IDummyLogger.WARNING, "Two file-list entries resolve to the same file '" + mapKey + "'; keeping the " + (keep.getCompressType() != ArchiveType.NONE ? "compressed" : "stored-as-is") + " one.");
+            if (keep == previous)
+            {
+                return;
+            }
+        }
+        _fileMapHolder.put(mapKey, candidate);
     }
 
     private static int trailingDigitRunLength(String value)
@@ -177,9 +232,17 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
         String  hashSum     = splitLineInfo[2];
 
         String filePath = getPathOfFile(pathUndName);
-        String fileName = getNameOfFile(pathUndName, !isSeparated, !original);
+        String fileName = getNameOfFile(pathUndName, !original);
 
-        FileInfoHolder fileInfoHolder = new FileInfoHolder(fileName, filePath, (original ? ArchiveType.LZMA_ARCHIVE : ArchiveType.NONE), isSeparated, countOfSeparatedParts);
+        // A split part is a raw slice of the archive: it is concatenated first and only the assembled whole is
+        // decoded, so a part itself is never an archive. An original is decoded only when the CDN actually stores
+        // it compressed - entries such as a bare '.torrent' are already final and must be kept byte-for-byte.
+        // RU: Часть разделённого файла - это сырой кусок архива: части сначала склеиваются, и распаковывается уже
+        // собранное целое, поэтому сама часть архивом не является. Оригинал распаковывается лишь тогда, когда CDN
+        // и правда хранит его сжатым: записи вроде голого '.torrent' уже готовы и должны сохраняться байт в байт.
+        ArchiveType compressType = (original && isCompressedEntry(pathUndName)) ? ArchiveType.LZMA_ARCHIVE : ArchiveType.NONE;
+
+        FileInfoHolder fileInfoHolder = new FileInfoHolder(fileName, filePath, compressType, isSeparated, countOfSeparatedParts);
         if ((original && countOfSeparatedParts == 0) || isSeparated)
         {
             fileInfoHolder.setAccessLink(new LinkInfoHolder(fileInfoHolder));
@@ -229,17 +292,51 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
         }
     }
 
-    private String getNameOfFile(String pathAndName, boolean separated, boolean ignoreExtension)
+    /**
+     * EN: Returns the last path segment. With {@code ignoreExtension} the raw CDN name is returned as-is (that is
+     *     what the download URL must use); otherwise the archive suffix is stripped to get the final on-disk name
+     *     ({@code L2.bin.dlt.z01} -> {@code L2.bin.dlt}, {@code map.unr.zip} -> {@code map.unr}). A name that
+     *     carries no archive suffix is returned untouched. <br>
+     * RU: Возвращает последний сегмент пути. С {@code ignoreExtension} отдаётся исходное имя с CDN как есть (именно
+     *     оно нужно для ссылки на скачивание); иначе отбрасывается архивный суффикс, чтобы получить итоговое имя на
+     *     диске ({@code L2.bin.dlt.z01} -> {@code L2.bin.dlt}, {@code map.unr.zip} -> {@code map.unr}). Имя без
+     *     архивного суффикса возвращается без изменений. <br>
+     * ==================================================================<br>
+     * EN: @param pathAndName the raw file-list path / RU: @param pathAndName исходный путь из списка файлов <br>
+     * EN: @param ignoreExtension keep the raw name / RU: @param ignoreExtension оставить исходное имя <br>
+     * @return <br>
+     *         {String} - EN: the file name / RU: имя файла <br>
+     **/
+    private String getNameOfFile(String pathAndName, boolean ignoreExtension)
     {
         String[] splitPathByFolders
                 = pathAndName.split("/");
         String nameOfFile
                 = splitPathByFolders[splitPathByFolders.length - 1];
-        if (!ignoreExtension && (nameOfFile.endsWith(".zip") || separated))
+        if (!ignoreExtension)
         {
-            nameOfFile = nameOfFile.substring(0, nameOfFile.length() - 4);
+            nameOfFile = ARCHIVE_SUFFIX.matcher(nameOfFile).replaceFirst("");
         }
         return nameOfFile;
+    }
+
+    /**
+     * EN: Tells whether the CDN entry is a compressed payload (a {@code .zip}, or a {@code .zNN} volume that the
+     *     parts are concatenated into) rather than an already-final file stored as-is. The file-list type field
+     *     cannot answer this: a raw {@code .torrent} and its {@code .torrent.zip} counterpart both carry type 0,
+     *     so the suffix is the only reliable signal. <br>
+     * RU: Сообщает, является ли запись на CDN сжатым содержимым ({@code .zip} либо том {@code .zNN}, из которых
+     *     склеивается архив), а не уже готовым файлом, который лежит как есть. Поле типа из списка файлов ответа не
+     *     даёт: у сырого {@code .torrent} и у его пары {@code .torrent.zip} тип одинаковый (0), поэтому суффикс —
+     *     единственный надёжный признак. <br>
+     * ==================================================================<br>
+     * EN: @param pathAndName the raw file-list path / RU: @param pathAndName исходный путь из списка файлов <br>
+     * @return <br>
+     *         {boolean} - EN: true when the entry needs decompressing / RU: true, когда запись нужно распаковывать <br>
+     **/
+    private static boolean isCompressedEntry(String pathAndName)
+    {
+        return ARCHIVE_SUFFIX.matcher(pathAndName).find();
     }
 
     private String getPathOfFile(String pathAndName)
@@ -291,7 +388,7 @@ public class NcTaiwanLinkGenerator extends GeneralLinkGenerator
     private String formatGetUrl(String pathAndName)
     {
         String path = getPathOfFile(pathAndName);
-        String name = getNameOfFile(pathAndName, false, true);
+        String name = getNameOfFile(pathAndName, true);
         int patchVer= getPatchVersion(pathAndName);
         if (path.isEmpty())
         {
