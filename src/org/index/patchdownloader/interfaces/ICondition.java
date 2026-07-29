@@ -65,6 +65,12 @@ public interface ICondition
 
     public static List<ICondition> loadConditions(GeneralLinkGenerator generalLinkGenerator)
     {
+        // Build the include/exclude name filters FIRST, so the start-up comparator can be told which files the run
+        // actually wants. Without this it would restore-hash / source-verify EVERY file in the map (gigabytes) even
+        // when '-include_filter System/*' selects a handful — the filters were previously appended only AFTER the
+        // comparator had already run over the whole map.
+        List<ICondition> filterConditions = loadFilterConditions();
+
         List<ICondition> conditionList = new ArrayList<>();
         // One start-up comparator handles BOTH restore (verify files already in the output folder) and
         // source-compare (copy proven files from a local source). Restore has strict priority internally:
@@ -73,7 +79,7 @@ public interface ICondition
         boolean sourceEnabled = MainConfig.SOURCE_COMPARE_PATH != null;
         if (restoreEnabled || sourceEnabled)
         {
-            ICondition condition = new ConditionStartupCompare(generalLinkGenerator);
+            ICondition condition = new ConditionStartupCompare(generalLinkGenerator, filterConditions);
             if (condition instanceof ILoadable)
             {
                 ((ILoadable) condition).load();
@@ -84,6 +90,23 @@ public interface ICondition
             }
             conditionList.add(condition);
         }
+        // Same order as before: comparator first, then exclude filters, then include filters (loadFilterConditions
+        // builds them in that order). Appending the SAME instances keeps a single source of truth for the filter.
+        conditionList.addAll(filterConditions);
+        return conditionList;
+    }
+
+    /**
+     * EN: Builds only the name-based include/exclude filter conditions from the config, in the order
+     *     [exclude..., include...]. Shared by {@link #loadConditions(GeneralLinkGenerator)} (which prepends the
+     *     start-up comparator) and by the comparator itself (which uses them via
+     *     {@link #checkCondition(List, FileInfoHolder)} to skip verifying files the run does not want). A blank or
+     *     separator-only segment builds no condition.
+     * @return the include/exclude filter conditions (possibly empty)
+     */
+    public static List<ICondition> loadFilterConditions()
+    {
+        List<ICondition> filterConditions = new ArrayList<>();
         if (MainConfig.EXCLUDE_FILE_FILTER != null)
         {
             for (String filter : MainConfig.EXCLUDE_FILE_FILTER.split(";"))
@@ -92,7 +115,7 @@ public interface ICondition
                 {
                     continue;
                 }
-                conditionList.add(new ConditionName(false, filter));
+                filterConditions.add(new ConditionName(false, filter));
             }
         }
         if (MainConfig.INCLUDE_FILE_FILTER != null)
@@ -103,9 +126,9 @@ public interface ICondition
                 {
                     continue;
                 }
-                conditionList.add(new ConditionName(true, filter));
+                filterConditions.add(new ConditionName(true, filter));
             }
         }
-        return conditionList;
+        return filterConditions;
     }
 }

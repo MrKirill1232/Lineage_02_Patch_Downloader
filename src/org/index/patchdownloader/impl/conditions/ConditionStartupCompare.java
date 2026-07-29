@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -59,8 +60,10 @@ import org.index.patchdownloader.util.concurrent.PipelineExecutors;
 public class ConditionStartupCompare implements IDummyLogger, ILoadable, ICondition, IThreadResponse
 {
     private final GeneralLinkGenerator  _linkGenerator;
+    private final List<ICondition>      _filterConditions;
     private final Set<String>           _excludeFileList;
     private final int                   _parallelism;
+    private int                         _processTotal;
 
     private final boolean               _restoreEnabled;
     private final ISourceVerifier       _restoreVerifier;
@@ -75,9 +78,10 @@ public class ConditionStartupCompare implements IDummyLogger, ILoadable, ICondit
     private final AtomicInteger         _partialCounter;
     private int                         _nextPercentNumber;
 
-    public ConditionStartupCompare(GeneralLinkGenerator linkGenerator)
+    public ConditionStartupCompare(GeneralLinkGenerator linkGenerator, List<ICondition> filterConditions)
     {
         _linkGenerator      = linkGenerator;
+        _filterConditions   = filterConditions;
         _excludeFileList    = ConcurrentHashMap.newKeySet();
 
         _restoreEnabled     = MainConfig.RESTORE_DOWNLOADING && (MainConfig.CHECK_BY_NAME || MainConfig.CHECK_BY_HASH_SUM || MainConfig.CHECK_BY_SIZE);
@@ -103,19 +107,31 @@ public class ConditionStartupCompare implements IDummyLogger, ILoadable, ICondit
     }
 
     /**
-     * EN: Runs the two comparison phases in strict order and logs a summary. Phase 1 (restore) runs to
-     *     completion before Phase 2 (source-compare) touches the output folder, which both gives restore
-     *     priority and gives the akumu verifier a read-before-write barrier. Synchronous. <br>
-     * RU: Выполняет две фазы сравнения в строгом порядке и логирует итог. Фаза 1 (restore) завершается полностью
-     *     до того, как Фаза 2 (source-compare) тронет папку вывода, что и даёт restore приоритет, и даёт
-     *     верификатору akumu барьер «чтение-раньше-записи». Синхронно. <br>
+     * EN: Runs the two comparison phases in strict order and logs a summary, over ONLY the files that pass the
+     *     run's include/exclude filters (not the whole map). Phase 1 (restore) runs to completion before Phase 2
+     *     (source-compare) touches the output folder, which both gives restore priority and gives the akumu
+     *     verifier a read-before-write barrier. Synchronous. <br>
+     * RU: Выполняет две фазы сравнения в строгом порядке и логирует итог, ТОЛЬКО по файлам, прошедшим
+     *     include/exclude-фильтры запуска (не по всей карте). Фаза 1 (restore) завершается полностью до того, как
+     *     Фаза 2 (source-compare) тронет папку вывода, что и даёт restore приоритет, и даёт верификатору akumu
+     *     барьер «чтение-раньше-записи». Синхронно. <br>
      **/
     @Override
     public void load()
     {
-        Collection<FileInfoHolder> files = _linkGenerator.getFileMapHolder().values();
-        _nextPercentNumber = Math.max(1, (files.size() / 100) / 2);
-        IDummyLogger.log(IDummyLogger.INFO, getClass(), "load() method bump. Startup compare: restore=" + _restoreEnabled + ", source=" + _sourceEnabled + " over " + files.size() + " files...", null);
+        // Verify only the files this run actually wants (those passing the include/exclude filters), not the whole
+        // map. For a CDN source each file has its own final hash, so a filtered-out file is never needed here; for a
+        // torrent source a boundary piece still reads its neighbour file straight from disk in the verifier, so
+        // restricting the WORK set never changes a wanted file's verdict. This turns '-include_filter System/*' from
+        // "hash every file in the patch" into "hash only System/*", the whole point of the filter.
+        Collection<FileInfoHolder> allFiles = _linkGenerator.getFileMapHolder().values();
+        List<FileInfoHolder> files = allFiles.stream()
+                .filter(fileInfo -> ICondition.checkCondition(_filterConditions, fileInfo))
+                .toList();
+        _processTotal = files.size();
+        _nextPercentNumber = Math.max(1, (_processTotal / 100) / 2);
+        int filteredOut = allFiles.size() - _processTotal;
+        IDummyLogger.log(IDummyLogger.INFO, getClass(), "load() method bump. Startup compare: restore=" + _restoreEnabled + ", source=" + _sourceEnabled + " over " + _processTotal + " filter-selected file(s)" + (filteredOut > 0 ? " (" + filteredOut + " skipped by filter)" : "") + "...", null);
 
         if (_restoreEnabled)
         {
@@ -126,7 +142,7 @@ public class ConditionStartupCompare implements IDummyLogger, ILoadable, ICondit
             runPhase("StartupSource", files, this::sourcePhase);
         }
 
-        IDummyLogger.log(IDummyLogger.FINE, getClass(), "Startup compare done. Restored=" + _restoredCounter.get() + ", copied=" + _copiedCounter.get() + " (partial=" + _partialCounter.get() + "), to-download=" + (files.size() - _excludeFileList.size()) + " of " + files.size() + ".", null);
+        IDummyLogger.log(IDummyLogger.FINE, getClass(), "Startup compare done. Restored=" + _restoredCounter.get() + ", copied=" + _copiedCounter.get() + " (partial=" + _partialCounter.get() + "), to-download=" + (_processTotal - _excludeFileList.size()) + " of " + _processTotal + ".", null);
     }
 
     /**
@@ -279,7 +295,7 @@ public class ConditionStartupCompare implements IDummyLogger, ILoadable, ICondit
     {
         if ((_seenCounter.incrementAndGet() % _nextPercentNumber == 0) && MainConfig.LOGGING_FILE_CHECK_IN_CONDITION)
         {
-            IDummyLogger.log(IDummyLogger.INFO, getClass(), "Progress: " + IDummyLogger.getPercentMessage(IDummyLogger.getPercentOfCompletion(_seenCounter.get(), _linkGenerator.getFileMapHolder().size())), null);
+            IDummyLogger.log(IDummyLogger.INFO, getClass(), "Progress: " + IDummyLogger.getPercentMessage(IDummyLogger.getPercentOfCompletion(_seenCounter.get(), _processTotal)), null);
         }
     }
 
